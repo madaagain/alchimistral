@@ -276,6 +276,7 @@ function EdgesLayer({ nodes, edges }: { nodes: AgentNode[]; edges: typeof EDGES 
 }
 
 interface LabProps {
+  projectId: string
   onRoom: () => void
 }
 

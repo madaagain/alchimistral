@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import {
-  Hexagon,
   FolderOpen,
   Terminal,
   Bot,
@@ -9,6 +8,7 @@ import {
   Play,
   User,
 } from 'lucide-react'
+import logoUrl from '../assets/alchimistral-logo.svg'
 import { T } from './styles/tokens'
 import { NODES, WORKTREES } from './styles/data'
 import { useWebSocket } from './hooks/useWebSocket'
@@ -16,13 +16,13 @@ import Dot from './components/Dot'
 import Projects from './views/Projects'
 import Room from './views/Room'
 import Lab from './views/Lab'
-import type { Project } from './styles/data'
+import type { ApiProject } from './api/projects'
 
 type View = 'projects' | 'room' | 'lab'
 
 export default function App() {
   const [view, setView] = useState<View>('projects')
-  const [project, setProject] = useState<Project | null>(null)
+  const [project, setProject] = useState<ApiProject | null>(null)
   const { connected, messages } = useWebSocket('ws://localhost:8000/ws')
 
   return (
@@ -43,14 +43,14 @@ export default function App() {
       >
         {/* Logo */}
         <div
-          className="flex items-center gap-1.5 cursor-pointer"
+          className="flex items-center gap-2 cursor-pointer"
           style={{ marginRight: 16 }}
           onClick={() => { setView('projects'); setProject(null) }}
         >
-          <Hexagon size={16} strokeWidth={1.5} style={{ color: T.t }} />
+          <img src={logoUrl} alt="Alchemistral" style={{ height: 20, width: 20, display: 'block' }} />
           <span
             className="font-mono"
-            style={{ fontSize: 13, fontWeight: 700, letterSpacing: 2.5, color: T.t }}
+            style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: T.t }}
           >
             ALCHEMISTRAL
           </span>
@@ -98,7 +98,7 @@ export default function App() {
                 borderRadius: 2,
               }}
             >
-              <Terminal size={8} style={{ color: T.t3 }} /> Vibe CLI
+              <Terminal size={8} style={{ color: T.t3 }} /> {project.cli_adapter}
             </span>
           </>
         ) : (
@@ -111,16 +111,16 @@ export default function App() {
           {project && (
             <>
               {[
-                { label: `${NODES.length} agents`, Icon: Bot },
-                { label: `${NODES.filter((n) => n.status === 'active').length} active`, c: T.blu, Icon: Loader2 },
-                { label: `${WORKTREES.length} worktrees`, c: T.pur, Icon: GitBranch },
+                { label: `${NODES.length} agents`, Icon: Bot, c: undefined as string | undefined },
+                { label: `${NODES.filter((n) => n.status === 'active').length} active`, Icon: Loader2, c: T.blu },
+                { label: `${WORKTREES.length} worktrees`, Icon: GitBranch, c: T.pur },
               ].map((s) => (
                 <span
                   key={s.label}
                   className="flex items-center gap-1 font-mono"
-                  style={{ fontSize: 9, color: s.c || T.t3 }}
+                  style={{ fontSize: 9, color: s.c ?? T.t3 }}
                 >
-                  <s.Icon size={10} style={{ color: s.c || T.t3 }} /> {s.label}
+                  <s.Icon size={10} style={{ color: s.c ?? T.t3 }} /> {s.label}
                 </span>
               ))}
               <div style={{ width: 1, height: 16, background: T.bdr }} />
@@ -176,9 +176,16 @@ export default function App() {
             }}
           />
         ) : view === 'room' ? (
-          <Room onLab={() => setView('lab')} wsMessages={messages} />
+          <Room
+            projectId={project.id}
+            onLab={() => setView('lab')}
+            wsMessages={messages}
+          />
         ) : (
-          <Lab onRoom={() => setView('room')} />
+          <Lab
+            projectId={project.id}
+            onRoom={() => setView('room')}
+          />
         )}
       </div>
     </div>
