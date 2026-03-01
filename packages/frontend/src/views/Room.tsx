@@ -32,7 +32,9 @@ export type SysMsg  = { role: 'sys';  text: string; ts: string }
 export type OrchMsg = { role: 'orch'; text: string; ts: string }
 export type RepMsg  = { role: 'rep';  orig: string; refined: string; ts: string }
 export type ValMsg  = { role: 'val';  agent: string; level: number; status: string; detail: string; ts: string }
-export type ChatMsg = DevMsg | SysMsg | OrchMsg | RepMsg | ValMsg
+export type AgentMsg = { role: 'agent'; agentId: string; eventType: string; text: string; ts: string }
+export type MissionMsg = { role: 'mission'; success: boolean; completed: number; failed: number; total: number; text: string; ts: string }
+export type ChatMsg = DevMsg | SysMsg | OrchMsg | RepMsg | ValMsg | AgentMsg | MissionMsg
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -77,11 +79,13 @@ interface RoomProps {
   chatMessages: ChatMsg[]
   setChatMessages: React.Dispatch<React.SetStateAction<ChatMsg[]>>
   dagTasks: OrchestratorTask[]
+  scanStatus: string | null
+  refreshTick: number
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function Room({ projectId, onLab, chatMessages, setChatMessages, dagTasks }: RoomProps) {
+export default function Room({ projectId, onLab, chatMessages, setChatMessages, dagTasks, scanStatus, refreshTick }: RoomProps) {
   const { theme } = useTheme()
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -124,6 +128,14 @@ export default function Room({ projectId, onLab, chatMessages, setChatMessages, 
     loadMemory()
     loadContracts()
   }, [loadMemory, loadContracts])
+
+  // Reload memory/contracts/files when backend signals refresh (scan_complete, files_updated)
+  useEffect(() => {
+    if (refreshTick > 0) {
+      loadMemory()
+      loadContracts()
+    }
+  }, [refreshTick, loadMemory, loadContracts])
 
   // Reload memory/contracts when chat messages change
   const lastChatLen = useRef(0)
@@ -211,13 +223,36 @@ export default function Room({ projectId, onLab, chatMessages, setChatMessages, 
           background: theme.bg1,
         }}
       >
-        <FileTree projectId={projectId} />
+        <FileTree projectId={projectId} refreshTick={refreshTick} />
       </div>
 
       {/* ── Center: Mission Feed ── */}
       <div className="flex-1 flex flex-col" style={{ minWidth: 0 }}>
         <div className="flex-1 overflow-y-auto" style={{ padding: '16px 20px' }}>
-          {chatMessages.length === 0 && (
+          {scanStatus && (
+            <div
+              style={{
+                borderLeft: `2px solid ${theme.pur}`,
+                padding: '8px 12px',
+                marginBottom: 8,
+                fontFamily: theme.mono,
+              }}
+            >
+              <div style={{ fontSize: 8, fontWeight: 600, letterSpacing: 2, color: theme.pur, marginBottom: 4 }}>
+                SCANNER
+              </div>
+              <div
+                style={{
+                  fontSize: 10.5,
+                  color: theme.t2,
+                  animation: 'thinking-pulse 1.5s ease-in-out infinite',
+                }}
+              >
+                &#9676; {scanStatus}
+              </div>
+            </div>
+          )}
+          {chatMessages.length === 0 && !scanStatus && (
             <div
               style={{
                 textAlign: 'center',

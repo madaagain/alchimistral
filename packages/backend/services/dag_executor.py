@@ -14,6 +14,9 @@ from services.agent_manager import agent_manager
 logger = logging.getLogger(__name__)
 
 
+MAX_CONCURRENT_AGENTS = 3
+
+
 async def execute_dag(
     dag: list[dict],
     project_path: str,
@@ -25,12 +28,15 @@ async def execute_dag(
     """
     Execute a DAG of agent tasks with dependency resolution.
 
-    Tasks with no dependencies run in parallel.
+    Tasks with no dependencies run in parallel (up to MAX_CONCURRENT_AGENTS).
     Tasks wait for all dependencies to complete before spawning.
     """
     if not dag:
         logger.info("Empty DAG — nothing to execute")
         return
+
+    # Semaphore to limit concurrent agent processes (prevents OOM)
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_AGENTS)
 
     # Build lookup
     tasks_by_id: dict[str, dict] = {t["id"]: t for t in dag}
@@ -46,15 +52,35 @@ async def execute_dag(
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
 
-    async def _wait_for_agent(agent_id: str, task_id: str) -> None:
-        """Wait for an agent to complete by polling its state."""
-        while True:
-            state = agent_manager.get_agent(agent_id)
-            if not state:
-                break
-            if state.status in ("done", "failed"):
-                break
-            await asyncio.sleep(1)
+    async def _run_agent(agent_id: str, task_id: str, task: dict) -> None:
+        """Acquire semaphore, spawn agent, wait for completion, release."""
+        async with semaphore:
+            domain = task.get("agent_domain", "backend")
+            label = task.get("label", task_id)
+            prompt = task.get("prompt", "")
+
+            logger.info(f"[dag] Semaphore acquired for {agent_id} ({MAX_CONCURRENT_AGENTS - semaphore._value}/{MAX_CONCURRENT_AGENTS} slots used)")
+
+            await agent_manager.spawn_agent(
+                agent_id=agent_id,
+                domain=domain,
+                label=label,
+                task_prompt=prompt,
+                project_path=project_path,
+                alch_dir=alch_dir,
+                broadcast=broadcast,
+                cli_adapter_name=cli_adapter_name,
+                project_id=project_id,
+            )
+
+            # Poll until done
+            while True:
+                state = agent_manager.get_agent(agent_id)
+                if not state:
+                    break
+                if state.status in ("done", "failed"):
+                    break
+                await asyncio.sleep(1)
 
         state = agent_manager.get_agent(agent_id)
         if state and state.status == "done":
@@ -102,31 +128,15 @@ async def execute_dag(
             if _deps_met(task):
                 ready.append(task)
 
-        # Spawn ready tasks
+        # Spawn ready tasks (semaphore limits concurrency)
         for task in ready:
             tid = task["id"]
             spawned.add(tid)
-
             agent_id = f"{task.get('agent_domain', 'agent')}-{tid}"
-            domain = task.get("agent_domain", "backend")
-            label = task.get("label", tid)
-            prompt = task.get("prompt", "")
 
-            await agent_manager.spawn_agent(
-                agent_id=agent_id,
-                domain=domain,
-                label=label,
-                task_prompt=prompt,
-                project_path=project_path,
-                alch_dir=alch_dir,
-                broadcast=broadcast,
-                cli_adapter_name=cli_adapter_name,
-                project_id=project_id,
-            )
-
-            # Create a future that waits for this agent to finish
+            # _run_agent acquires the semaphore before spawning
             agent_futures[tid] = asyncio.create_task(
-                _wait_for_agent(agent_id, tid)
+                _run_agent(agent_id, tid, task)
             )
 
         # If nothing was spawned and nothing is running, we're stuck
@@ -150,6 +160,37 @@ async def execute_dag(
         "completed": list(completed),
         "failed": list(failed),
         "text": f"DAG complete: {len(completed)} succeeded, {len(failed)} failed",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+
+    # Mission complete report
+    task_summaries = []
+    for t in dag:
+        tid = t["id"]
+        status = "done" if tid in completed else "failed" if tid in failed else "unknown"
+        task_summaries.append({
+            "id": tid,
+            "label": t.get("label", tid),
+            "domain": t.get("agent_domain", "unknown"),
+            "status": status,
+            "branch": f"agent/{t.get('agent_domain', 'agent')}-{tid}",
+        })
+
+    all_passed = len(failed) == 0 and len(completed) == len(dag)
+    await broadcast({
+        "agent_id": "orchestrator",
+        "type": "mission_complete",
+        "success": all_passed,
+        "completed_count": len(completed),
+        "failed_count": len(failed),
+        "total_count": len(dag),
+        "tasks": task_summaries,
+        "text": (
+            f"Mission complete — all {len(completed)} agents finished successfully. "
+            "Ready for review & merge."
+            if all_passed
+            else f"Mission finished with issues: {len(completed)} succeeded, {len(failed)} failed."
+        ),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
 

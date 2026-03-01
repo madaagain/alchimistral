@@ -132,7 +132,9 @@ async def _pipeline(
     for contract in result.get("contracts", []):
         fname: str = contract.get("file", "contract.json")
         content: str = contract.get("content", "")
-        (contracts_dir / fname).write_text(content)
+        target = contracts_dir / fname
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
         await broadcast({
             "agent_id": "orchestrator",
             "type": "contract_update",

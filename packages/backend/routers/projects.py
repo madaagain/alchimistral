@@ -2,12 +2,15 @@
 Projects router — CRUD for named projects stored in ~/.alchemistral/projects.json
 """
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from services.alchemistral import (
     get_project,
@@ -18,6 +21,7 @@ from services.alchemistral import (
 from services.codebase_scanner import scan_and_generate_global
 from services.agent_manager import agent_manager
 from services.worktree import list_worktrees, _run_git
+from ws_manager import manager as ws_manager
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -77,7 +81,8 @@ async def create_project(req: CreateProjectRequest):
     init_alchemistral_dir(local_path)
 
     # Run codebase scan in background — generates codebase-summary.md + smart GLOBAL.md
-    asyncio.create_task(scan_and_generate_global(local_path))
+    logger.info(f"[projects] Launching codebase scan for: {local_path}")
+    asyncio.create_task(scan_and_generate_global(local_path, broadcast=ws_manager.broadcast))
 
     project = {
         "id": str(uuid.uuid4()),

@@ -23,12 +23,12 @@ import Dot from "./components/Dot";
 import AgentBar from "./components/AgentBar";
 import Welcome from "./views/Welcome";
 import Projects from "./views/Projects";
-import Room, { type ChatMsg } from "./views/Room";
 import Lab from "./views/Lab";
+import type { ChatMsg } from "./views/Room";
 import type { ApiProject } from "./api/projects";
 import type { OrchestratorTask } from "./api/orchestrator";
 
-type View = "welcome" | "projects" | "room" | "lab";
+type View = "welcome" | "projects" | "lab";
 
 function SettingsModal({ onClose }: { onClose: () => void }) {
   const { theme, mode, toggle } = useTheme();
@@ -85,63 +85,24 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
           <span className="font-mono" style={{ fontSize: 12, fontWeight: 600, color: theme.t, letterSpacing: 1 }}>
             SETTINGS
           </span>
-          <button
-            onClick={onClose}
-            style={{ background: "transparent", border: "none", cursor: "pointer" }}
-          >
+          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer" }}>
             <X size={16} style={{ color: theme.t3 }} />
           </button>
         </div>
 
         {/* Theme toggle */}
-        <div className="font-mono" style={{ fontSize: 9, color: theme.t3, letterSpacing: 1.5, marginBottom: 8 }}>
-          APPEARANCE
-        </div>
-        <div
-          className="flex items-center justify-between"
-          style={{
-            padding: "10px 12px",
-            background: theme.bg,
-            border: `1px solid ${theme.bdr}`,
-            borderRadius: 6,
-            marginBottom: 20,
-          }}
-        >
-          <span className="font-mono" style={{ fontSize: 10, color: theme.t2 }}>
-            Theme
-          </span>
-          <button
-            onClick={toggle}
-            className="flex items-center gap-2 font-mono"
-            style={{
-              padding: "4px 12px",
-              background: theme.bg2,
-              border: `1px solid ${theme.bdr}`,
-              borderRadius: 4,
-              color: theme.t,
-              fontSize: 10,
-              cursor: "pointer",
-            }}
-          >
+        <div className="font-mono" style={{ fontSize: 9, color: theme.t3, letterSpacing: 1.5, marginBottom: 8 }}>APPEARANCE</div>
+        <div className="flex items-center justify-between" style={{ padding: "10px 12px", background: theme.bg, border: `1px solid ${theme.bdr}`, borderRadius: 6, marginBottom: 20 }}>
+          <span className="font-mono" style={{ fontSize: 10, color: theme.t2 }}>Theme</span>
+          <button onClick={toggle} className="flex items-center gap-2 font-mono" style={{ padding: "4px 12px", background: theme.bg2, border: `1px solid ${theme.bdr}`, borderRadius: 4, color: theme.t, fontSize: 10, cursor: "pointer" }}>
             {mode === "dark" ? <Moon size={12} /> : <Sun size={12} />}
             {mode === "dark" ? "Dark" : "Light"}
           </button>
         </div>
 
         {/* CLI Status */}
-        <div className="font-mono" style={{ fontSize: 9, color: theme.t3, letterSpacing: 1.5, marginBottom: 8 }}>
-          CLI ADAPTER
-        </div>
-        <div
-          className="flex items-center gap-3"
-          style={{
-            padding: "10px 12px",
-            background: theme.bg,
-            border: `1px solid ${theme.bdr}`,
-            borderRadius: 6,
-            marginBottom: 20,
-          }}
-        >
+        <div className="font-mono" style={{ fontSize: 9, color: theme.t3, letterSpacing: 1.5, marginBottom: 8 }}>CLI ADAPTER</div>
+        <div className="flex items-center gap-3" style={{ padding: "10px 12px", background: theme.bg, border: `1px solid ${theme.bdr}`, borderRadius: 6, marginBottom: 20 }}>
           <Terminal size={14} style={{ color: theme.t3 }} />
           <div>
             <div className="font-mono" style={{ fontSize: 10, color: theme.t }}>Vibe CLI</div>
@@ -154,10 +115,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* API Keys */}
-        <div className="font-mono" style={{ fontSize: 9, color: theme.t3, letterSpacing: 1.5, marginBottom: 8 }}>
-          API KEYS
-        </div>
-
+        <div className="font-mono" style={{ fontSize: 9, color: theme.t3, letterSpacing: 1.5, marginBottom: 8 }}>API KEYS</div>
         <div style={{ marginBottom: 16 }}>
           <label className="font-mono" style={{ fontSize: 10, color: theme.t2, display: "block", marginBottom: 4 }}>
             Mistral API Key
@@ -176,33 +134,14 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
                 placeholder="Enter new key..."
                 className="font-mono w-full"
-                style={{
-                  background: theme.bg,
-                  border: `1px solid ${theme.bdr}`,
-                  borderRadius: 4,
-                  padding: "8px 32px 8px 10px",
-                  color: theme.t,
-                  fontSize: 11,
-                  outline: "none",
-                }}
+                style={{ background: theme.bg, border: `1px solid ${theme.bdr}`, borderRadius: 4, padding: "8px 32px 8px 10px", color: theme.t, fontSize: 11, outline: "none" }}
               />
               <button
                 onClick={() => setShowKey(!showKey)}
                 className="absolute"
-                style={{
-                  right: 8,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                }}
+                style={{ right: 8, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", cursor: "pointer" }}
               >
-                {showKey ? (
-                  <EyeOff size={13} style={{ color: theme.t3 }} />
-                ) : (
-                  <Eye size={13} style={{ color: theme.t3 }} />
-                )}
+                {showKey ? <EyeOff size={13} style={{ color: theme.t3 }} /> : <Eye size={13} style={{ color: theme.t3 }} />}
               </button>
             </div>
             <button
@@ -213,11 +152,8 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 padding: "8px 16px",
                 background: saved ? theme.grn + "20" : theme.bg2,
                 border: `1px solid ${saved ? theme.grn + "44" : theme.bdr}`,
-                borderRadius: 4,
-                color: saved ? theme.grn : theme.t,
-                fontSize: 10,
-                cursor: key.trim() ? "pointer" : "default",
-                opacity: key.trim() ? 1 : 0.5,
+                borderRadius: 4, color: saved ? theme.grn : theme.t, fontSize: 10,
+                cursor: key.trim() ? "pointer" : "default", opacity: key.trim() ? 1 : 0.5,
               }}
             >
               {saving ? "..." : saved ? "Saved" : "Save"}
@@ -251,12 +187,14 @@ export default function App() {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const { connected, messages } = useWebSocket("ws://localhost:8000/ws");
 
-  // ── App-level chat state (persists across view switches) ──────────────
+  // ── App-level chat state ──────────────────────────────────────────────
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [dagTasks, setDagTasks] = useState<OrchestratorTask[]>([]);
+  const [scanStatus, setScanStatus] = useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
   const processedRef = useRef(0);
 
-  // Process WS events at App level — runs regardless of which view is active
+  // Process WS events at App level
   useEffect(() => {
     const newEvents = messages.slice(processedRef.current);
     processedRef.current = messages.length;
@@ -268,40 +206,59 @@ export default function App() {
       const ts = fmtTs(ev.timestamp as string | undefined);
 
       if (ev.type === "reprompt") {
-        newMsgs.push({
-          role: "rep",
-          orig: (ev.original as string) ?? "",
-          refined: (ev.refined as string) ?? "",
-          ts,
-        });
+        newMsgs.push({ role: "rep", orig: (ev.original as string) ?? "", refined: (ev.refined as string) ?? "", ts });
       } else if (ev.type === "thinking" || ev.type === "ready") {
         newMsgs.push({ role: "orch", text: ev.text ?? "", ts });
       } else if (ev.type === "dag_update") {
         const dag = (ev.dag as OrchestratorTask[]) ?? [];
         setDagTasks(dag);
-        if (dag.length > 0) {
-          newMsgs.push({ role: "orch", text: dagSummary(dag), ts });
-        }
+        if (dag.length > 0) newMsgs.push({ role: "orch", text: dagSummary(dag), ts });
       } else if (ev.type === "contract_update") {
-        const file = (ev.file as string) ?? "contract";
-        newMsgs.push({ role: "orch", text: `Contract written: ${file}`, ts });
+        newMsgs.push({ role: "orch", text: `Contract written: ${(ev.file as string) ?? "contract"}`, ts });
       } else if (ev.type === "memory_update") {
         const additions = (ev.additions as string[]) ?? [];
-        newMsgs.push({
-          role: "orch",
-          text: `Global memory updated:\n${additions.map((a) => `— ${a}`).join("\n")}`,
-          ts,
-        });
+        newMsgs.push({ role: "orch", text: `Global memory updated:\n${additions.map((a) => `\u2014 ${a}`).join("\n")}`, ts });
+        setRefreshTick((t) => t + 1);
+      } else if (ev.type === "scanning") {
+        setScanStatus(ev.text ?? "Scanning...");
+      } else if (ev.type === "scan_complete") {
+        setScanStatus(null);
+        setRefreshTick((t) => t + 1);
+      } else if (ev.type === "files_updated") {
+        setRefreshTick((t) => t + 1);
       } else if (ev.type === "assistant") {
         newMsgs.push({ role: "orch", text: ev.text ?? "", ts });
-      } else if (ev.type === "error") {
+      } else if (ev.type === "error" && (ev.agent_id === "orchestrator" || !ev.agent_id)) {
         newMsgs.push({ role: "orch", text: `Error: ${ev.text ?? "Unknown error"}`, ts });
+      }
+
+      // ── Agent lifecycle events (non-orchestrator) ──
+      const agentId = ev.agent_id as string | undefined;
+      if (agentId && agentId !== "orchestrator") {
+        if (ev.type === "spawn") {
+          newMsgs.push({ role: "agent", agentId, eventType: "spawn", text: `Agent spawned: ${(ev.label as string) ?? agentId} [${(ev.domain as string) ?? ""}]`, ts });
+        } else if (ev.type === "done") {
+          newMsgs.push({ role: "agent", agentId, eventType: "done", text: ev.text ?? "Agent completed", ts });
+        } else if (ev.type === "error") {
+          newMsgs.push({ role: "agent", agentId, eventType: "error", text: ev.text ?? "Agent error", ts });
+        }
+      }
+
+      // ── Mission complete ──
+      if (ev.type === "mission_complete") {
+        newMsgs.push({
+          role: "mission",
+          success: (ev.success as boolean) ?? false,
+          completed: (ev.completed_count as number) ?? 0,
+          failed: (ev.failed_count as number) ?? 0,
+          total: (ev.total_count as number) ?? 0,
+          text: ev.text ?? "Mission finished",
+          ts,
+        });
       }
     }
 
-    if (newMsgs.length > 0) {
-      setChatMessages((prev) => [...prev, ...newMsgs]);
-    }
+    if (newMsgs.length > 0) setChatMessages((prev) => [...prev, ...newMsgs]);
   }, [messages]);
 
   // Reset all state when switching projects
@@ -310,11 +267,12 @@ export default function App() {
     setDagTasks([]);
     setLiveAgents([]);
     setSelectedAgent(null);
+    setScanStatus(null);
     processedRef.current = messages.length;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id]);
 
-  // Poll live agents when a project is open (scoped by project_id)
+  // Poll live agents
   const pollAgents = useCallback(() => {
     if (!project) return;
     listAgents(project.id).then(setLiveAgents).catch(() => {});
@@ -339,133 +297,47 @@ export default function App() {
       {/* Top Bar */}
       <div
         className="flex items-center flex-shrink-0"
-        style={{
-          height: 42,
-          padding: "0 16px",
-          borderBottom: `1px solid ${theme.bdr}`,
-          background: theme.bg,
-          zIndex: 100,
-        }}
+        style={{ height: 42, padding: "0 16px", borderBottom: `1px solid ${theme.bdr}`, background: theme.bg, zIndex: 100 }}
       >
         {/* Logo */}
         <div
           className="flex items-center gap-2 cursor-pointer"
           style={{ marginRight: 16 }}
-          onClick={() => {
-            setView("projects");
-            setProject(null);
-          }}
+          onClick={() => { setView("projects"); setProject(null); }}
         >
-          <img
-            src={logoUrl}
-            alt="Alchemistral"
-            style={{ height: 20, width: 20, display: "block" }}
-          />
-          <span
-            className="font-mono"
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: 2.5,
-              color: theme.t,
-            }}
-          >
+          <img src={logoUrl} alt="Alchemistral" style={{ height: 20, width: 20, display: "block" }} />
+          <span className="font-mono" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: theme.t }}>
             Alchimistral
           </span>
         </div>
 
-        <div
-          style={{ width: 1, height: 16, background: theme.bdr, marginRight: 12 }}
-        />
+        <div style={{ width: 1, height: 16, background: theme.bdr, marginRight: 12 }} />
 
         {project ? (
           <>
-            {(["room", "lab"] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setView(tab)}
-                style={{
-                  padding: "0 12px",
-                  height: 42,
-                  background: "transparent",
-                  border: "none",
-                  borderBottom:
-                    view === tab
-                      ? `1.5px solid ${theme.t}`
-                      : "1.5px solid transparent",
-                  color: view === tab ? theme.t : theme.t3,
-                  fontSize: 11,
-                  fontWeight: view === tab ? 600 : 400,
-                  cursor: "pointer",
-                  fontFamily: theme.sans,
-                  textTransform: "capitalize",
-                }}
-              >
-                {tab === "room" ? "Room" : "Lab"}
-              </button>
-            ))}
-
-            <div
-              style={{
-                width: 1,
-                height: 16,
-                background: theme.bdr,
-                margin: "0 12px",
-              }}
-            />
-
-            <div
-              className="flex items-center gap-1 font-mono"
-              style={{ fontSize: 10, color: theme.t2 }}
-            >
+            <div className="flex items-center gap-1 font-mono" style={{ fontSize: 10, color: theme.t2 }}>
               <FolderOpen size={11} style={{ color: theme.t3 }} /> {project.name}
             </div>
             <span
               className="flex items-center gap-1 font-mono"
-              style={{
-                fontSize: 8,
-                color: theme.t3,
-                marginLeft: 8,
-                padding: "1px 5px",
-                border: `1px solid ${theme.bdr}`,
-                borderRadius: 2,
-              }}
+              style={{ fontSize: 8, color: theme.t3, marginLeft: 8, padding: "1px 5px", border: `1px solid ${theme.bdr}`, borderRadius: 2 }}
             >
-              <Terminal size={8} style={{ color: theme.t3 }} />{" "}
-              {project.cli_adapter}
+              <Terminal size={8} style={{ color: theme.t3 }} /> {project.cli_adapter}
             </span>
           </>
         ) : (
-          <span className="font-mono" style={{ fontSize: 10, color: theme.t3 }}>
-            SELECT A PROJECT
-          </span>
+          <span className="font-mono" style={{ fontSize: 10, color: theme.t3 }}>SELECT A PROJECT</span>
         )}
 
         <div className="ml-auto flex items-center gap-2.5">
           {project && (
             <>
               {[
-                {
-                  label: `${liveAgents.length} agents`,
-                  Icon: Bot,
-                  c: undefined as string | undefined,
-                },
-                {
-                  label: `${liveAgents.filter((a) => a.status === "active").length} active`,
-                  Icon: Loader2,
-                  c: theme.blu,
-                },
-                {
-                  label: `${liveAgents.filter((a) => a.worktree_path).length} worktrees`,
-                  Icon: GitBranch,
-                  c: theme.pur,
-                },
+                { label: `${liveAgents.length} agents`, Icon: Bot, c: undefined as string | undefined },
+                { label: `${liveAgents.filter((a) => a.status === "active").length} active`, Icon: Loader2, c: theme.blu },
+                { label: `${liveAgents.filter((a) => a.worktree_path).length} worktrees`, Icon: GitBranch, c: theme.pur },
               ].map((s) => (
-                <span
-                  key={s.label}
-                  className="flex items-center gap-1 font-mono"
-                  style={{ fontSize: 9, color: s.c ?? theme.t3 }}
-                >
+                <span key={s.label} className="flex items-center gap-1 font-mono" style={{ fontSize: 9, color: s.c ?? theme.t3 }}>
                   <s.Icon size={10} style={{ color: s.c ?? theme.t3 }} /> {s.label}
                 </span>
               ))}
@@ -473,55 +345,27 @@ export default function App() {
             </>
           )}
 
-          {/* Connection status */}
           <div className="flex items-center gap-1.5">
             <Dot color={connected ? theme.grn : theme.red} pulse={connected} size={5} />
-            <span className="font-mono" style={{ fontSize: 8, color: theme.t3 }}>
-              {connected ? "CONNECTED" : "OFFLINE"}
-            </span>
+            <span className="font-mono" style={{ fontSize: 8, color: theme.t3 }}>{connected ? "CONNECTED" : "OFFLINE"}</span>
           </div>
 
           <button
             onClick={() => setShowSettings(true)}
             className="flex items-center justify-center"
-            style={{
-              width: 24,
-              height: 24,
-              background: "transparent",
-              border: `1px solid ${theme.bdr}`,
-              borderRadius: 4,
-              cursor: "pointer",
-            }}
+            style={{ width: 24, height: 24, background: "transparent", border: `1px solid ${theme.bdr}`, borderRadius: 4, cursor: "pointer" }}
           >
             <Settings size={12} style={{ color: theme.t3 }} />
           </button>
 
           <div
             className="flex items-center gap-1 font-mono"
-            style={{
-              padding: "3px 8px",
-              borderRadius: 3,
-              fontSize: 8,
-              fontWeight: 600,
-              letterSpacing: 0.8,
-              background: theme.grn + "15",
-              border: `1px solid ${theme.grn}33`,
-              color: theme.grn,
-            }}
+            style={{ padding: "3px 8px", borderRadius: 3, fontSize: 8, fontWeight: 600, letterSpacing: 0.8, background: theme.grn + "15", border: `1px solid ${theme.grn}33`, color: theme.grn }}
           >
             <Play size={8} style={{ color: theme.grn }} /> DEMO
           </div>
 
-          <div
-            className="flex items-center justify-center"
-            style={{
-              width: 24,
-              height: 24,
-              borderRadius: "50%",
-              background: theme.bg2,
-              border: `1px solid ${theme.bdr}`,
-            }}
-          >
+          <div className="flex items-center justify-center" style={{ width: 24, height: 24, borderRadius: "50%", background: theme.bg2, border: `1px solid ${theme.bdr}` }}>
             <User size={12} style={{ color: theme.t3 }} />
           </div>
         </div>
@@ -534,31 +378,27 @@ export default function App() {
             <Projects
               onSelect={(p) => {
                 setProject(p);
-                setView("room");
+                setView("lab");
               }}
             />
-          ) : view === "room" ? (
-            <Room
+          ) : (
+            <Lab
               projectId={project.id}
-              onLab={() => setView("lab")}
+              wsMessages={messages}
               chatMessages={chatMessages}
               setChatMessages={setChatMessages}
-              dagTasks={dagTasks}
+              scanStatus={scanStatus}
+              refreshTick={refreshTick}
             />
-          ) : (
-            <Lab projectId={project.id} onRoom={() => setView("room")} wsMessages={messages} />
           )}
         </div>
 
-        {/* Agent Status Bar — visible when a project is open */}
-        {project && (view === "room" || view === "lab") && (
+        {/* Agent Status Bar */}
+        {project && view === "lab" && (
           <AgentBar
             agents={liveAgents}
             selectedAgent={selectedAgent}
-            onSelectAgent={(id) => {
-              setSelectedAgent(id);
-              setView("lab");
-            }}
+            onSelectAgent={(id) => setSelectedAgent(id)}
           />
         )}
       </div>

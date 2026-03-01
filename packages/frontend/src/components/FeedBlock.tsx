@@ -15,6 +15,8 @@ export default function FeedBlock({ msg }: FeedBlockProps) {
     orch: theme.blu,
     rep: theme.pur,
     val: theme.grn,
+    agent: theme.cyn,
+    mission: theme.grn,
   }
 
   const labels: Record<string, string> = {
@@ -23,6 +25,8 @@ export default function FeedBlock({ msg }: FeedBlockProps) {
     orch: 'ORCHESTRATOR',
     rep: 'REPROMPT',
     val: 'VALIDATION',
+    agent: 'AGENT',
+    mission: 'MISSION',
   }
 
   const borderColor = borderColors[msg.role] || theme.t3
@@ -45,6 +49,20 @@ export default function FeedBlock({ msg }: FeedBlockProps) {
       effectiveLabel = 'ERROR'
       effectiveBorder = theme.red
     }
+  }
+
+  // Agent sub-label shows agent ID and event type
+  if (msg.role === 'agent') {
+    effectiveLabel = msg.agentId.toUpperCase()
+    if (msg.eventType === 'spawn') effectiveBorder = theme.pur
+    else if (msg.eventType === 'done') { effectiveBorder = theme.grn; effectiveLabel += ' \u2713' }
+    else if (msg.eventType === 'error') { effectiveBorder = theme.red; effectiveLabel += ' \u2717' }
+  }
+
+  // Mission complete styling
+  if (msg.role === 'mission') {
+    effectiveLabel = msg.success ? 'MISSION COMPLETE' : 'MISSION FINISHED'
+    effectiveBorder = msg.success ? theme.grn : theme.amb
   }
 
   return (
@@ -90,6 +108,15 @@ export default function FeedBlock({ msg }: FeedBlockProps) {
             {msg.status === 'pass' ? '\u2713' : '\u2717'} {msg.agent.toUpperCase()} &mdash; Gate L{msg.level}: {msg.status.toUpperCase()}
           </span>
           <div style={{ fontSize: 9.5, color: theme.t2, marginTop: 2 }}>{msg.detail}</div>
+        </div>
+      ) : msg.role === 'mission' ? (
+        <div>
+          <div style={{ fontSize: 11, color: msg.success ? theme.grn : theme.amb, fontWeight: 600, marginBottom: 4 }}>
+            {msg.success ? '\u2713' : '\u26a0'} {msg.completed}/{msg.total} agents completed
+          </div>
+          <div style={{ fontSize: 10.5, color: theme.t2, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+            {msg.text}
+          </div>
         </div>
       ) : (
         <div style={{ fontSize: 10.5, color: msg.role === 'dev' ? theme.t : theme.t2, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>

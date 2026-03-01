@@ -5,6 +5,7 @@ import { fetchFileTree, type FileEntry } from '../api/files'
 
 interface FileTreeProps {
   projectId: string
+  refreshTick?: number
 }
 
 function FileNode({ entry, projectId, depth }: { entry: FileEntry; projectId: string; depth: number }) {
@@ -76,7 +77,7 @@ function FileNode({ entry, projectId, depth }: { entry: FileEntry; projectId: st
   )
 }
 
-export default function FileTree({ projectId }: FileTreeProps) {
+export default function FileTree({ projectId, refreshTick = 0 }: FileTreeProps) {
   const { theme } = useTheme()
   const [entries, setEntries] = useState<FileEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -87,7 +88,7 @@ export default function FileTree({ projectId }: FileTreeProps) {
       setEntries(items)
       setLoading(false)
     }).catch(() => setLoading(false))
-  }, [projectId])
+  }, [projectId, refreshTick])
 
   return (
     <div style={{ padding: '8px 0' }}>

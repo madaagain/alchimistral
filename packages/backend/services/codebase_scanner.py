@@ -7,6 +7,7 @@ Runs ONCE at project creation. Produces:
 """
 import asyncio
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from services.mistral_client import get_client
@@ -53,28 +54,36 @@ _SOURCE_EXTS = {
 }
 
 _GLOBAL_SYSTEM_PROMPT = """\
-You are analyzing a codebase to create a project memory file for Alchemistral, \
-a multi-agent coding orchestrator. Based on the scan below, generate a GLOBAL.md \
-with these sections:
+Generate a GLOBAL.md for this SPECIFIC codebase. Do NOT describe Alchemistral. \
+Describe what you see in the file tree and source files below.
+
+You are analyzing an external project that a developer imported into Alchemistral \
+(a multi-agent orchestrator). Your job is to describe THIS project — not Alchemistral itself.
+
+Based on the codebase scan below, generate a GLOBAL.md with these sections:
 
 ## Project Overview
-(What is this project? What does it do?)
+(What is this project? What does it do? Base this on the README and source files.)
 
 ## Stack
-(Language, frameworks, build system, dependencies)
+(Language, frameworks, build system, dependencies — only what the scan shows)
 
 ## Architecture
 (Key modules/directories and what they do)
 
 ## Conventions
-(Coding style, naming, patterns detected)
+(Coding style, naming, patterns detected from the source samples)
 
 ## Entry Points
 (Main files, build commands)
 
-Be specific to THIS project. If it's C++ with CMake, say so. If it's a game engine, \
-describe the engine architecture. Never mention TypeScript unless the project actually \
-uses it. Never invent files that don't appear in the scan. Be concise — max 80 lines.\
+RULES:
+- ONLY describe files and technologies that appear in the scan below
+- If the project is C++ with CMake, say so — do not mention Node.js or TypeScript
+- If the project is a game server, describe the game server — not a web app
+- Never invent files that don't appear in the scan
+- Never mention Alchemistral, orchestrators, or agents in the output
+- Be concise — max 80 lines\
 """
 
 
@@ -154,7 +163,7 @@ def build_codebase_summary(project_path: str) -> str:
     imports = _sample_imports(project_path, files)
 
     sections = [
-        f"# Codebase Scan\n\nScanned: {len(files)} files",
+        f"# Codebase Scan\n\nPath: {project_path}\nScanned: {len(files)} files",
         f"## Detected Stack\n{chr(10).join(f'- {s}' for s in stack) if stack else '(none detected)'}",
         f"## File Tree\n{chr(10).join(files)}",
     ]
@@ -166,26 +175,75 @@ def build_codebase_summary(project_path: str) -> str:
     return "\n\n".join(sections)
 
 
-async def scan_and_generate_global(project_path: str) -> None:
+def _ts() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+async def scan_and_generate_global(project_path: str, broadcast=None) -> None:
     """
     Full scan flow — called once at project creation.
     1. Build codebase-summary.md
     2. Call Mistral Large to generate intelligent GLOBAL.md
     3. Write both files to .alchemistral/
+    4. Broadcast progress events via WebSocket
     """
+    project_path = str(Path(project_path).resolve())
+    logger.info(f"[codebase_scanner] Scanning codebase at: {project_path}")
+
+    if not Path(project_path).exists():
+        logger.error(f"[codebase_scanner] Path does not exist: {project_path}")
+        return
+
+    # Sanity check: list top-level contents to verify we're in the right place
+    top_level = [p.name for p in sorted(Path(project_path).iterdir())[:20]]
+    logger.info(f"[codebase_scanner] Top-level contents: {top_level}")
+
     alch = Path(project_path) / ".alchemistral"
     alch.mkdir(parents=True, exist_ok=True)
+
+    # Broadcast: scanning started
+    if broadcast:
+        await broadcast({
+            "agent_id": "orchestrator",
+            "type": "scanning",
+            "text": "Scanning codebase...",
+            "timestamp": _ts(),
+        })
 
     # Step 1: raw scan
     summary = await asyncio.to_thread(build_codebase_summary, project_path)
     (alch / "codebase-summary.md").write_text(summary)
-    logger.info(f"Wrote codebase-summary.md for {project_path}")
+    logger.info(f"[codebase_scanner] Wrote codebase-summary.md ({len(summary)} chars) for {project_path}")
+
+    # Broadcast: files written
+    if broadcast:
+        await broadcast({
+            "agent_id": "orchestrator",
+            "type": "files_updated",
+            "timestamp": _ts(),
+        })
 
     # Step 2: call Mistral Large for intelligent GLOBAL.md
     client = get_client()
     if not client.api_key:
         logger.warning("MISTRAL_API_KEY not set — skipping LLM-generated GLOBAL.md")
+        if broadcast:
+            await broadcast({
+                "agent_id": "orchestrator",
+                "type": "scan_complete",
+                "global_md": "",
+                "timestamp": _ts(),
+            })
         return
+
+    # Broadcast: generating project memory
+    if broadcast:
+        await broadcast({
+            "agent_id": "orchestrator",
+            "type": "scanning",
+            "text": "Generating project memory...",
+            "timestamp": _ts(),
+        })
 
     try:
         global_md = await client.chat(
@@ -198,5 +256,21 @@ async def scan_and_generate_global(project_path: str) -> None:
         )
         (alch / "GLOBAL.md").write_text(global_md)
         logger.info(f"Wrote LLM-generated GLOBAL.md for {project_path}")
+
+        # Broadcast: scan complete with new GLOBAL.md content
+        if broadcast:
+            await broadcast({
+                "agent_id": "orchestrator",
+                "type": "scan_complete",
+                "global_md": global_md,
+                "timestamp": _ts(),
+            })
     except Exception as exc:
         logger.warning(f"Failed to generate GLOBAL.md via LLM: {exc}")
+        if broadcast:
+            await broadcast({
+                "agent_id": "orchestrator",
+                "type": "scan_complete",
+                "global_md": "",
+                "timestamp": _ts(),
+            })
