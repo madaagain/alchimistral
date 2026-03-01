@@ -11,7 +11,6 @@ import {
   Database,
   FileCode2,
   Network,
-  Minus,
   Workflow,
   CheckCircle2,
   Loader2,
@@ -24,12 +23,6 @@ import {
 import { T, STATUS_COLORS } from '../styles/tokens'
 import Tag from '../components/Tag'
 import {
-  MESSAGES,
-  DAG_TASKS,
-  ARCH_STACK,
-  AGENT_TREE,
-} from '../styles/data'
-import {
   fetchGlobalMemory,
   writeGlobalMemory,
   fetchAgentMemories,
@@ -37,16 +30,33 @@ import {
   fetchContractContent,
   type ContractInfo,
 } from '../api/memory'
-import type { WsEvent } from '../hooks/useWebSocket'
+import { sendMission, type OrchestratorTask } from '../api/orchestrator'
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export type DevMsg  = { role: 'dev';  text: string; ts: string }
+export type SysMsg  = { role: 'sys';  text: string; ts: string }
+export type OrchMsg = { role: 'orch'; text: string; ts: string }
+export type RepMsg  = { role: 'rep';  orig: string; refined: string; ts: string }
+export type ValMsg  = { role: 'val';  agent: string; level: number; status: string; detail: string; ts: string }
+export type ChatMsg = DevMsg | SysMsg | OrchMsg | RepMsg | ValMsg
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmtTs(): string {
+  return new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+// ── Sub-components ───────────────────────────────────────────────────────────
 
 function StatusIcon({ status, size = 10 }: { status: string; size?: number }) {
   const color = STATUS_COLORS[status] || T.t3
   switch (status) {
-    case 'done': return <CheckCircle2 size={size} style={{ color }} />
-    case 'active': return <Loader2 size={size} style={{ color }} />
-    case 'review': return <Eye size={size} style={{ color }} />
-    case 'blocked': return <Ban size={size} style={{ color }} />
-    default: return <Circle size={size} style={{ color }} />
+    case 'done':    return <CheckCircle2 size={size} style={{ color }} />
+    case 'active':  return <Loader2     size={size} style={{ color }} />
+    case 'review':  return <Eye         size={size} style={{ color }} />
+    case 'blocked': return <Ban         size={size} style={{ color }} />
+    default:        return <Circle      size={size} style={{ color }} />
   }
 }
 
@@ -54,28 +64,28 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="font-mono uppercase"
-      style={{
-        fontSize: 8,
-        fontWeight: 600,
-        letterSpacing: 2,
-        color: T.t3,
-        marginBottom: 8,
-        marginTop: 16,
-      }}
+      style={{ fontSize: 8, fontWeight: 600, letterSpacing: 2, color: T.t3, marginBottom: 8, marginTop: 16 }}
     >
       {children}
     </div>
   )
 }
 
+// ── Props ─────────────────────────────────────────────────────────────────────
+
 interface RoomProps {
   projectId: string
   onLab: () => void
-  wsMessages: WsEvent[]
+  chatMessages: ChatMsg[]
+  setChatMessages: React.Dispatch<React.SetStateAction<ChatMsg[]>>
+  dagTasks: OrchestratorTask[]
 }
 
-export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
+// ── Component ────────────────────────────────────────────────────────────────
+
+export default function Room({ projectId, onLab, chatMessages, setChatMessages, dagTasks }: RoomProps) {
   const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
   const [rightTab, setRightTab] = useState('arch')
   const [expandedContract, setExpandedContract] = useState<string | null>(null)
   const [contractContents, setContractContents] = useState<Record<string, string>>({})
@@ -91,10 +101,12 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
   // Contracts tab state
   const [contracts, setContracts] = useState<ContractInfo[]>([])
 
+  // ── Auto-scroll ──────────────────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [wsMessages])
+  }, [chatMessages])
 
+  // ── Load right panel data ────────────────────────────────────────────────
   const loadMemory = useCallback(async () => {
     const [mem, agents] = await Promise.all([
       fetchGlobalMemory(projectId),
@@ -114,6 +126,46 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
     loadContracts()
   }, [loadMemory, loadContracts])
 
+  // Reload memory/contracts when chat messages change (new events came in)
+  const lastChatLen = useRef(0)
+  useEffect(() => {
+    if (chatMessages.length > lastChatLen.current) {
+      // Check if any new messages are contract or memory updates
+      const newMsgs = chatMessages.slice(lastChatLen.current)
+      const hasContract = newMsgs.some((m) => m.role === 'orch' && 'text' in m && m.text.startsWith('Contract written:'))
+      const hasMemory = newMsgs.some((m) => m.role === 'orch' && 'text' in m && m.text.startsWith('Global memory updated:'))
+      if (hasContract) loadContracts()
+      if (hasMemory) loadMemory()
+    }
+    lastChatLen.current = chatMessages.length
+  }, [chatMessages, loadContracts, loadMemory])
+
+  // ── Send mission ─────────────────────────────────────────────────────────
+  const handleSend = async () => {
+    const msg = input.trim()
+    if (!msg || sending) return
+    setInput('')
+    setSending(true)
+
+    // Add dev message immediately
+    setChatMessages((prev) => [
+      ...prev,
+      { role: 'dev', text: msg, ts: fmtTs() },
+    ])
+
+    try {
+      await sendMission(projectId, msg)
+    } catch (err) {
+      setChatMessages((prev) => [
+        ...prev,
+        { role: 'sys', text: `Failed to reach backend: ${(err as Error).message}`, ts: fmtTs() },
+      ])
+    } finally {
+      setSending(false)
+    }
+  }
+
+  // ── Memory save ──────────────────────────────────────────────────────────
   const handleSaveMemory = async () => {
     setSavingMemory(true)
     await writeGlobalMemory(projectId, memoryDraft)
@@ -122,12 +174,10 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
     setSavingMemory(false)
   }
 
+  // ── Contract expand ──────────────────────────────────────────────────────
   const handleExpandContract = async (info: ContractInfo) => {
     const key = info.file
-    if (expandedContract === key) {
-      setExpandedContract(null)
-      return
-    }
+    if (expandedContract === key) { setExpandedContract(null); return }
     setExpandedContract(key)
     if (!contractContents[key]) {
       const content = await fetchContractContent(projectId, key)
@@ -135,8 +185,9 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
     }
   }
 
-  const renderMessage = (m: typeof MESSAGES[number], i: number) => {
-    if (m.role === 'rep' && 'orig' in m && 'refined' in m) {
+  // ── Render message ───────────────────────────────────────────────────────
+  const renderMessage = (m: ChatMsg, i: number) => {
+    if (m.role === 'rep') {
       return (
         <div key={i} style={{ marginBottom: 20 }}>
           <div
@@ -165,7 +216,7 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
       )
     }
 
-    if (m.role === 'val' && 'agent' in m && 'level' in m && 'status' in m) {
+    if (m.role === 'val') {
       const c = m.status === 'pass' ? T.grn : T.red
       return (
         <div key={i} style={{ marginBottom: 16 }}>
@@ -184,17 +235,23 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
             }
             <div className="flex-1">
               <div className="font-mono uppercase" style={{ fontSize: 8, color: c, letterSpacing: 1, fontWeight: 600 }}>
-                GATE L{m.level} · {(m.agent as string).toUpperCase()}
+                GATE L{m.level} · {m.agent.toUpperCase()}
               </div>
-              <div style={{ fontSize: 10, color: T.t2, marginTop: 2 }}>
-                {'detail' in m ? (m as { detail: string }).detail : ''}
-              </div>
+              <div style={{ fontSize: 10, color: T.t2, marginTop: 2 }}>{m.detail}</div>
             </div>
-            <Tag color={c}>{(m.status as string).toUpperCase()}</Tag>
+            <Tag color={c}>{m.status.toUpperCase()}</Tag>
           </div>
         </div>
       )
     }
+
+    // dev, sys, orch
+    const avatar =
+      m.role === 'dev'
+        ? <User size={12} style={{ color: T.t3 }} />
+        : m.role === 'sys'
+          ? <Server size={11} style={{ color: T.t3 }} />
+          : <Hexagon size={12} style={{ color: T.t2 }} />
 
     return (
       <div
@@ -210,12 +267,7 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
             border: `1px solid ${T.bdr}`,
           }}
         >
-          {m.role === 'dev'
-            ? <User size={12} style={{ color: T.t3 }} />
-            : m.role === 'sys'
-              ? <Server size={11} style={{ color: T.t3 }} />
-              : <Hexagon size={12} style={{ color: T.t2 }} />
-          }
+          {avatar}
         </div>
         <div style={{ maxWidth: '78%' }}>
           <div
@@ -227,7 +279,7 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
               fontSize: 12, color: T.t, lineHeight: 1.6, fontFamily: T.sans, whiteSpace: 'pre-wrap',
             }}
           >
-            {'text' in m ? m.text : ''}
+            {m.text}
           </div>
           <div
             className="font-mono"
@@ -240,42 +292,31 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
     )
   }
 
+  // ── Right panel tabs ─────────────────────────────────────────────────────
   const rightTabs = [
     { id: 'arch', Icon: Layers },
-    { id: 'mem', Icon: Database },
-    { id: 'ctr', Icon: FileCode2 },
-    { id: 'dag', Icon: Network },
+    { id: 'mem',  Icon: Database },
+    { id: 'ctr',  Icon: FileCode2 },
+    { id: 'dag',  Icon: Network },
   ]
 
+  // DAG display — only show live tasks from orchestrator
+  const displayDag = dagTasks.map((t) => ({
+    id: t.id,
+    label: t.label,
+    agent: t.agent_domain,
+    status: 'pending',
+    deps: t.dependencies,
+  }))
+
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="flex-1 flex overflow-hidden" style={{ fontFamily: T.sans }}>
-      {/* Chat */}
+
+      {/* ── Chat ── */}
       <div className="flex-1 flex flex-col" style={{ maxWidth: 720, margin: '0 auto' }}>
         <div className="flex-1 overflow-y-auto" style={{ padding: '20px 24px' }}>
-          {MESSAGES.map(renderMessage)}
-          {wsMessages.map((msg, i) => (
-            <div key={`ws-${i}`} className="flex gap-2 items-start" style={{ marginBottom: 18 }}>
-              <div
-                className="flex items-center justify-center flex-shrink-0"
-                style={{ width: 24, height: 24, borderRadius: '50%', background: T.bg2, border: `1px solid ${T.bdr}` }}
-              >
-                <Hexagon size={12} style={{ color: T.t2 }} />
-              </div>
-              <div style={{ maxWidth: '78%' }}>
-                <div
-                  style={{
-                    padding: '9px 12px', background: T.bg1, border: `1px solid ${T.bdr}`,
-                    borderRadius: '2px 8px 8px 8px', fontSize: 12, color: T.t, lineHeight: 1.6, fontFamily: T.sans,
-                  }}
-                >
-                  {msg.text}
-                </div>
-                <div className="font-mono" style={{ fontSize: 8.5, color: T.t3, marginTop: 3 }}>
-                  {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ''}
-                </div>
-              </div>
-            </div>
-          ))}
+          {chatMessages.map(renderMessage)}
           <div ref={bottomRef} />
         </div>
 
@@ -288,6 +329,9 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+              }}
               placeholder="Describe what you want to build..."
               rows={2}
               style={{
@@ -296,18 +340,24 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
               }}
             />
             <button
+              onClick={handleSend}
+              disabled={!input.trim() || sending}
               className="flex items-center justify-center flex-shrink-0"
               style={{
                 width: 30, height: 30, borderRadius: 6,
-                background: input.trim() ? T.t : T.bg3, border: 'none',
-                cursor: input.trim() ? 'pointer' : 'default',
+                background: input.trim() && !sending ? T.t : T.bg3,
+                border: 'none',
+                cursor: input.trim() && !sending ? 'pointer' : 'default',
               }}
             >
-              <ArrowUp size={14} style={{ color: T.bg }} />
+              {sending
+                ? <Loader2 size={14} style={{ color: T.t3 }} />
+                : <ArrowUp size={14} style={{ color: T.bg }} />
+              }
             </button>
           </div>
           <div className="flex justify-between font-mono" style={{ marginTop: 5, fontSize: 8.5, color: T.t3 }}>
-            <span>Reprompt engine active</span>
+            <span>Reprompt engine active · Enter to send · Shift+Enter for newline</span>
             <span className="flex items-center gap-1" style={{ color: T.pur }}>
               <Sparkles size={9} style={{ color: T.pur }} /> Mistral Small
             </span>
@@ -315,7 +365,7 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
         </div>
       </div>
 
-      {/* Right panel */}
+      {/* ── Right panel ── */}
       <div className="flex flex-col flex-shrink-0" style={{ width: 300, borderLeft: `1px solid ${T.bdr}` }}>
         {/* Tabs */}
         <div className="flex flex-shrink-0" style={{ borderBottom: `1px solid ${T.bdr}` }}>
@@ -339,25 +389,31 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
         {/* Panel content */}
         <div className="flex-1 overflow-y-auto" style={{ padding: 14 }}>
 
-          {/* ARCH — static mock */}
+          {/* ARCH — architecture info */}
           {rightTab === 'arch' && (
             <>
-              <SectionHeader>Stack</SectionHeader>
-              {ARCH_STACK.map(({ key, value }) => (
-                <div key={key} className="flex gap-2 font-mono" style={{ marginBottom: 5, fontSize: 9.5 }}>
-                  <span className="flex-shrink-0" style={{ color: T.t3, width: 35 }}>{key}</span>
-                  <span style={{ color: T.t2 }}>{value}</span>
-                </div>
-              ))}
-              <SectionHeader>Agent Tree</SectionHeader>
-              <div className="flex flex-col gap-0.5">
-                {AGENT_TREE.map((r, i) => (
-                  <div key={i} className="flex items-center gap-1.5 font-mono" style={{ paddingLeft: r.depth * 14, fontSize: 9.5 }}>
-                    <StatusIcon status={r.status} size={10} />
-                    <span style={{ color: STATUS_COLORS[r.status] || T.t3 }}>{r.label}</span>
-                    {r.extra && <span style={{ color: T.t3, fontSize: 8 }}>{r.extra}</span>}
-                  </div>
-                ))}
+              <SectionHeader>Architecture</SectionHeader>
+              <div
+                className="font-mono"
+                style={{
+                  padding: '8px 10px', background: T.bg, border: `1px solid ${T.bdr}`,
+                  borderRadius: 4, fontSize: 9, color: T.t3, lineHeight: 1.6,
+                }}
+              >
+                {dagTasks.length > 0 ? (
+                  <>
+                    <div style={{ color: T.t2, marginBottom: 4 }}>{dagTasks.length} tasks in current DAG</div>
+                    {dagTasks.map((t) => (
+                      <div key={t.id} className="flex items-center gap-1" style={{ marginBottom: 2 }}>
+                        <StatusIcon status="pending" size={9} />
+                        <span style={{ color: T.t2 }}>{t.label}</span>
+                        <span style={{ color: T.t3 }}>({t.agent_domain})</span>
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  <span style={{ fontStyle: 'italic' }}>No active DAG. Send a mission to start.</span>
+                )}
               </div>
             </>
           )}
@@ -431,9 +487,7 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
 
               <SectionHeader>Agent Memories</SectionHeader>
               {agentFiles.length === 0 ? (
-                <div className="font-mono" style={{ fontSize: 9, color: T.t3 }}>
-                  No agent memories yet.
-                </div>
+                <div className="font-mono" style={{ fontSize: 9, color: T.t3 }}>No agent memories yet.</div>
               ) : (
                 agentFiles.map((f) => (
                   <div
@@ -479,9 +533,7 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
                   }}
                 >
                   <FileCode2 size={20} style={{ color: T.t3, margin: '0 auto 8px' }} />
-                  <div className="font-mono" style={{ fontSize: 9, color: T.t3 }}>
-                    No contracts yet.
-                  </div>
+                  <div className="font-mono" style={{ fontSize: 9, color: T.t3 }}>No contracts yet.</div>
                   <div className="font-mono" style={{ fontSize: 8, color: T.t3, marginTop: 4, lineHeight: 1.5 }}>
                     Agents write to .alchemistral/contracts/
                   </div>
@@ -504,9 +556,7 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
                         >
                           <FileCode2 size={11} style={{ color: T.cyn }} /> {c.file}
                         </span>
-                        <span className="font-mono" style={{ fontSize: 8, color: T.t3 }}>
-                          {c.size}B
-                        </span>
+                        <span className="font-mono" style={{ fontSize: 8, color: T.t3 }}>{c.size}B</span>
                       </div>
                     </div>
                     {expandedContract === c.file && (
@@ -528,11 +578,34 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
             </>
           )}
 
-          {/* DAG — static mock */}
+          {/* DAG — only live data */}
           {rightTab === 'dag' && (
             <>
-              <SectionHeader>DAG</SectionHeader>
-              {DAG_TASKS.map((t) => {
+              <div className="flex items-center justify-between" style={{ marginTop: 16, marginBottom: 8 }}>
+                <div className="font-mono uppercase" style={{ fontSize: 8, fontWeight: 600, letterSpacing: 2, color: T.t3 }}>
+                  DAG
+                </div>
+                {dagTasks.length > 0 && (
+                  <span className="font-mono" style={{ fontSize: 7.5, color: T.grn }}>
+                    {dagTasks.length} tasks
+                  </span>
+                )}
+              </div>
+
+              {displayDag.length === 0 ? (
+                <div
+                  style={{
+                    padding: '20px 14px', background: T.bg, border: `1px solid ${T.bdr}`,
+                    borderRadius: 4, textAlign: 'center',
+                  }}
+                >
+                  <Network size={20} style={{ color: T.t3, margin: '0 auto 8px' }} />
+                  <div className="font-mono" style={{ fontSize: 9, color: T.t3 }}>No DAG yet.</div>
+                  <div className="font-mono" style={{ fontSize: 8, color: T.t3, marginTop: 4, lineHeight: 1.5 }}>
+                    Send a mission to generate the task graph.
+                  </div>
+                </div>
+              ) : displayDag.map((t) => {
                 const c = STATUS_COLORS[t.status] || T.t3
                 return (
                   <div
@@ -556,6 +629,7 @@ export default function Room({ projectId, onLab, wsMessages }: RoomProps) {
               })}
             </>
           )}
+
         </div>
 
         {/* Enter Lab */}

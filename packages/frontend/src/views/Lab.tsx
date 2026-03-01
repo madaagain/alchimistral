@@ -24,7 +24,8 @@ import {
 import { T, STATUS_COLORS } from '../styles/tokens'
 import Tag from '../components/Tag'
 import Dot from '../components/Dot'
-import { NODES as INITIAL_NODES, EDGES, WORKTREES, type AgentNode } from '../styles/data'
+import { NODES as MOCK_NODES, EDGES as MOCK_EDGES, WORKTREES, type AgentNode } from '../styles/data'
+import type { WsEvent } from '../hooks/useWebSocket'
 
 const NODE_WIDTH = 240
 
@@ -245,7 +246,7 @@ function CanvasNode({
   )
 }
 
-function EdgesLayer({ nodes, edges }: { nodes: AgentNode[]; edges: typeof EDGES }) {
+function EdgesLayer({ nodes, edges }: { nodes: AgentNode[]; edges: { from: string; to: string }[] }) {
   const nodeMap: Record<string, AgentNode> = {}
   nodes.forEach((n) => (nodeMap[n.id] = n))
 
@@ -275,13 +276,180 @@ function EdgesLayer({ nodes, edges }: { nodes: AgentNode[]; edges: typeof EDGES 
   )
 }
 
+// Build edges from live agent nodes (orch → parent agents)
+function buildLiveEdges(nodes: AgentNode[]): { from: string; to: string }[] {
+  const edges: { from: string; to: string }[] = []
+  const orch = nodes.find((n) => n.type === 'orch')
+  if (orch) {
+    for (const n of nodes) {
+      if (n.type === 'parent') edges.push({ from: orch.id, to: n.id })
+    }
+  }
+  return edges
+}
+
+// Map backend agent status to UI node status
+function mapStatus(status: string): string {
+  switch (status) {
+    case 'spawning': return 'active'
+    case 'active': return 'active'
+    case 'validating': return 'review'
+    case 'done': return 'done'
+    case 'failed': return 'blocked'
+    default: return 'idle'
+  }
+}
+
+// Position agents in a grid layout
+function positionNodes(agents: AgentNode[]): AgentNode[] {
+  // Orch node at center top
+  const orch = agents.find((n) => n.type === 'orch')
+  const parents = agents.filter((n) => n.type === 'parent')
+  const totalWidth = parents.length * 280
+  const startX = 420 - totalWidth / 2 + 140
+
+  if (orch) {
+    orch.x = 420
+    orch.y = 100
+  }
+  parents.forEach((p, i) => {
+    p.x = startX + i * 280
+    p.y = 340
+  })
+  return agents
+}
+
 interface LabProps {
   projectId: string
   onRoom: () => void
+  wsMessages?: WsEvent[]
 }
 
-export default function Lab({ onRoom }: LabProps) {
-  const [nodes, setNodes] = useState(INITIAL_NODES)
+export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
+  const [liveNodes, setLiveNodes] = useState<AgentNode[]>([])
+  const [liveStream, setLiveStream] = useState<Record<string, string[]>>({})
+  const processedRef = useRef(0)
+
+  // Process WS events to build live agent nodes
+  useEffect(() => {
+    const newMessages = wsMessages.slice(processedRef.current)
+    if (newMessages.length === 0) return
+    processedRef.current = wsMessages.length
+
+    for (const msg of newMessages) {
+      const agentId = msg.agent_id as string
+      const type = msg.type as string
+
+      if (type === 'spawn') {
+        setLiveNodes((prev) => {
+          if (prev.find((n) => n.id === agentId)) return prev
+          // Also ensure orchestrator node exists
+          let nodes = [...prev]
+          if (!nodes.find((n) => n.type === 'orch')) {
+            nodes.push({
+              id: 'orch',
+              type: 'orch',
+              x: 420,
+              y: 100,
+              label: 'Orchestrator',
+              sub: 'mistral-large · coordination',
+              status: 'active',
+              tokens: '—',
+              progress: null,
+              task: 'Coordinating agents',
+              children: [],
+              branch: null,
+              skills: [],
+              validation: null,
+              worktree: null,
+            })
+          }
+          const domain = (msg.domain as string) || 'backend'
+          nodes.push({
+            id: agentId,
+            type: 'parent',
+            x: 0,
+            y: 0,
+            label: (msg.label as string) || agentId,
+            sub: `vibe cli · ${domain} · worktree`,
+            status: 'active',
+            tokens: '0',
+            progress: 5,
+            task: (msg.label as string) || 'Working...',
+            children: [],
+            branch: `agent/${agentId}`,
+            skills: [],
+            validation: null,
+            worktree: `.worktrees/${agentId}/`,
+          })
+          // Update orch children
+          const orchNode = nodes.find((n) => n.type === 'orch')
+          if (orchNode && !orchNode.children.includes(agentId)) {
+            orchNode.children = [...orchNode.children, agentId]
+          }
+          return positionNodes(nodes)
+        })
+      }
+
+      if (type === 'status' && agentId !== 'orchestrator') {
+        setLiveNodes((prev) =>
+          prev.map((n) =>
+            n.id === agentId
+              ? {
+                  ...n,
+                  status: mapStatus((msg.status as string) || 'active'),
+                  branch: (msg.branch as string) || n.branch,
+                  worktree: (msg.worktree as string) || n.worktree,
+                }
+              : n,
+          ),
+        )
+      }
+
+      if ((type === 'output' || type === 'think' || type === 'code' || type === 'bash') && agentId !== 'orchestrator') {
+        const text = (msg.text as string) || ''
+        setLiveStream((prev) => ({
+          ...prev,
+          [agentId]: [...(prev[agentId] || []), text].slice(-50),
+        }))
+        // Update progress
+        setLiveNodes((prev) =>
+          prev.map((n) =>
+            n.id === agentId && n.progress !== null
+              ? { ...n, progress: Math.min((n.progress || 0) + 2, 95), tokens: String(parseInt(n.tokens || '0') + text.length) }
+              : n,
+          ),
+        )
+      }
+
+      if (type === 'done' && agentId !== 'orchestrator') {
+        setLiveNodes((prev) =>
+          prev.map((n) =>
+            n.id === agentId
+              ? { ...n, status: 'done', progress: 100, validation: { level: 1, status: 'pass', result: 'Self-test passed' } }
+              : n,
+          ),
+        )
+      }
+
+      if (type === 'error' && agentId !== 'orchestrator') {
+        setLiveNodes((prev) =>
+          prev.map((n) =>
+            n.id === agentId
+              ? { ...n, status: 'blocked', task: (msg.text as string) || 'Error' }
+              : n,
+          ),
+        )
+      }
+    }
+  }, [wsMessages])
+
+  // Use live nodes if we have any, otherwise fall back to mock
+  const hasLiveData = liveNodes.length > 0
+  const [mockNodes, setMockNodes] = useState(MOCK_NODES)
+  const nodes = hasLiveData ? liveNodes : mockNodes
+  const edges = hasLiveData ? buildLiveEdges(liveNodes) : MOCK_EDGES
+  const setNodes = hasLiveData ? setLiveNodes : setMockNodes
   const [selected, setSelected] = useState<string | null>(null)
   const [viewport, setViewport] = useState({ x: -20, y: -20, z: 0.85 })
   const [panning, setPanning] = useState(false)
@@ -289,10 +457,11 @@ export default function Lab({ onRoom }: LabProps) {
   const [inspectorTab, setInspectorTab] = useState('info')
   const canvasRef = useRef<HTMLDivElement>(null)
 
-  // Simulate progress
+  // Simulate progress (only when using mock data)
   useEffect(() => {
+    if (hasLiveData) return
     const iv = setInterval(() => {
-      setNodes((prev) =>
+      setMockNodes((prev) =>
         prev.map((n) =>
           n.status === 'active' && n.progress !== null
             ? { ...n, progress: Math.min(n.progress + Math.random() * 1.2, 97) }
@@ -301,7 +470,7 @@ export default function Lab({ onRoom }: LabProps) {
       )
     }, 1100)
     return () => clearInterval(iv)
-  }, [])
+  }, [hasLiveData])
 
   // Wheel zoom
   const handleWheel = useCallback((e: WheelEvent) => {
@@ -359,7 +528,7 @@ export default function Lab({ onRoom }: LabProps) {
             transformOrigin: '0 0',
           }}
         >
-          <EdgesLayer nodes={nodes} edges={EDGES} />
+          <EdgesLayer nodes={nodes} edges={edges} />
           {nodes.map((n) => (
             <CanvasNode
               key={n.id}
@@ -784,21 +953,42 @@ export default function Lab({ onRoom }: LabProps) {
                       color: T.t3,
                       lineHeight: 1.8,
                       minHeight: 200,
+                      maxHeight: 400,
+                      overflowY: 'auto',
                     }}
                   >
-                    <div style={{ color: T.grn }}>$ vibe --prompt "..." --auto-approve</div>
-                    <div>Reading project structure...</div>
-                    <div>Found .alchemistral/contracts/api-schema.json</div>
-                    <div style={{ color: T.cyn }}>Creating src/components/AuthForm.tsx</div>
-                    <div style={{ color: T.t2 }}>{'const { useState } = React'}</div>
-                    <div style={{ color: T.t2 }}>{'const auth = useAuthStore()'}</div>
-                    <div>...</div>
-                    <div style={{ color: T.grn }}>$ npm run build</div>
-                    <div style={{ color: T.grn }}>Build passed</div>
-                    <div style={{ color: T.grn }}>$ npm test — 8/8</div>
-                    <div className="flex items-center gap-1" style={{ color: T.amb, marginTop: 6 }}>
-                      <ShieldCheck size={10} style={{ color: T.amb }} /> Self-test PASS
-                    </div>
+                    {liveStream[selectedNode.id]?.length ? (
+                      liveStream[selectedNode.id].map((line, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            color: line.startsWith('$') ? T.grn
+                              : line.includes('pass') || line.includes('PASS') ? T.grn
+                              : line.includes('error') || line.includes('ERROR') ? T.red
+                              : line.includes('Creating') || line.includes('Writing') ? T.cyn
+                              : T.t3,
+                          }}
+                        >
+                          {line}
+                        </div>
+                      ))
+                    ) : (
+                      <>
+                        <div style={{ color: T.grn }}>$ vibe --prompt "..." --auto-approve</div>
+                        <div>Reading project structure...</div>
+                        <div>Found .alchemistral/contracts/api-schema.json</div>
+                        <div style={{ color: T.cyn }}>Creating src/components/AuthForm.tsx</div>
+                        <div style={{ color: T.t2 }}>{'const { useState } = React'}</div>
+                        <div style={{ color: T.t2 }}>{'const auth = useAuthStore()'}</div>
+                        <div>...</div>
+                        <div style={{ color: T.grn }}>$ npm run build</div>
+                        <div style={{ color: T.grn }}>Build passed</div>
+                        <div style={{ color: T.grn }}>$ npm test — 8/8</div>
+                        <div className="flex items-center gap-1" style={{ color: T.amb, marginTop: 6 }}>
+                          <ShieldCheck size={10} style={{ color: T.amb }} /> Self-test PASS
+                        </div>
+                      </>
+                    )}
                   </div>
                 </>
               )}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   FolderOpen,
   Terminal,
@@ -7,23 +7,247 @@ import {
   GitBranch,
   Play,
   User,
-} from 'lucide-react'
-import logoUrl from '../assets/alchimistral-logo.svg'
-import { T } from './styles/tokens'
-import { NODES, WORKTREES } from './styles/data'
-import { useWebSocket } from './hooks/useWebSocket'
-import Dot from './components/Dot'
-import Projects from './views/Projects'
-import Room from './views/Room'
-import Lab from './views/Lab'
-import type { ApiProject } from './api/projects'
+  Settings,
+  X,
+  Eye,
+  EyeOff,
+} from "lucide-react";
+import logoUrl from "../assets/alchimistral-logo.svg";
+import { T } from "./styles/tokens";
+// data.ts only used by Lab.tsx for mock fallback now
+import { getKeys, updateKeys } from "./api/settings";
+import { listAgents, type AgentInfo } from "./api/agents";
+import { useWebSocket } from "./hooks/useWebSocket";
+import Dot from "./components/Dot";
+import Projects from "./views/Projects";
+import Room, { type ChatMsg } from "./views/Room";
+import Lab from "./views/Lab";
+import type { ApiProject } from "./api/projects";
+import type { OrchestratorTask } from "./api/orchestrator";
 
-type View = 'projects' | 'room' | 'lab'
+type View = "projects" | "room" | "lab";
+
+function SettingsModal({ onClose }: { onClose: () => void }) {
+  const [key, setKey] = useState("");
+  const [masked, setMasked] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    getKeys()
+      .then((k) => setMasked(k.mistral_api_key))
+      .catch(() => {});
+  }, []);
+
+  const handleSave = async () => {
+    if (!key.trim()) return;
+    setSaving(true);
+    try {
+      await updateKeys({ mistral_api_key: key });
+      setMasked(key.slice(0, 8) + "...");
+      setKey("");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      // ignore
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center"
+      style={{ zIndex: 1000, background: "rgba(0,0,0,.6)" }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 420,
+          background: T.bg1,
+          border: `1px solid ${T.bdr}`,
+          borderRadius: 8,
+          padding: 24,
+        }}
+      >
+        <div className="flex items-center justify-between" style={{ marginBottom: 20 }}>
+          <span className="font-mono" style={{ fontSize: 12, fontWeight: 600, color: T.t, letterSpacing: 1 }}>
+            SETTINGS
+          </span>
+          <button
+            onClick={onClose}
+            style={{ background: "transparent", border: "none", cursor: "pointer" }}
+          >
+            <X size={16} style={{ color: T.t3 }} />
+          </button>
+        </div>
+
+        <div className="font-mono" style={{ fontSize: 9, color: T.t3, letterSpacing: 1.5, marginBottom: 8 }}>
+          API KEYS
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label className="font-mono" style={{ fontSize: 10, color: T.t2, display: "block", marginBottom: 4 }}>
+            Mistral API Key
+          </label>
+          {masked && !key && (
+            <div className="font-mono" style={{ fontSize: 9, color: T.t3, marginBottom: 4 }}>
+              Current: {masked}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <input
+                type={showKey ? "text" : "password"}
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                placeholder="Enter new key..."
+                className="font-mono w-full"
+                style={{
+                  background: T.bg,
+                  border: `1px solid ${T.bdr}`,
+                  borderRadius: 4,
+                  padding: "8px 32px 8px 10px",
+                  color: T.t,
+                  fontSize: 11,
+                  outline: "none",
+                }}
+              />
+              <button
+                onClick={() => setShowKey(!showKey)}
+                className="absolute"
+                style={{
+                  right: 8,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                {showKey ? (
+                  <EyeOff size={13} style={{ color: T.t3 }} />
+                ) : (
+                  <Eye size={13} style={{ color: T.t3 }} />
+                )}
+              </button>
+            </div>
+            <button
+              onClick={handleSave}
+              disabled={saving || !key.trim()}
+              className="font-mono"
+              style={{
+                padding: "8px 16px",
+                background: saved ? T.grn + "20" : T.bg2,
+                border: `1px solid ${saved ? T.grn + "44" : T.bdr}`,
+                borderRadius: 4,
+                color: saved ? T.grn : T.t,
+                fontSize: 10,
+                cursor: key.trim() ? "pointer" : "default",
+                opacity: key.trim() ? 1 : 0.5,
+              }}
+            >
+              {saving ? "..." : saved ? "Saved" : "Save"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function fmtTs(iso?: string): string {
+  const d = iso ? new Date(iso) : new Date();
+  return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function dagSummary(dag: OrchestratorTask[]): string {
+  const lines = dag.map((t) => {
+    const deps = t.dependencies.length > 0 ? ` <- ${t.dependencies.join(", ")}` : "";
+    return `  ${t.id}: ${t.label} [${t.agent_domain}]${deps}`;
+  });
+  return `DAG decomposed:\n${lines.join("\n")}`;
+}
 
 export default function App() {
-  const [view, setView] = useState<View>('projects')
-  const [project, setProject] = useState<ApiProject | null>(null)
-  const { connected, messages } = useWebSocket('ws://localhost:8000/ws')
+  const [view, setView] = useState<View>("projects");
+  const [project, setProject] = useState<ApiProject | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [liveAgents, setLiveAgents] = useState<AgentInfo[]>([]);
+  const { connected, messages } = useWebSocket("ws://localhost:8000/ws");
+
+  // ── App-level chat state (persists across view switches) ──────────────
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [dagTasks, setDagTasks] = useState<OrchestratorTask[]>([]);
+  const processedRef = useRef(0);
+
+  // Process WS events at App level — runs regardless of which view is active
+  useEffect(() => {
+    const newEvents = messages.slice(processedRef.current);
+    processedRef.current = messages.length;
+    if (newEvents.length === 0) return;
+
+    const newMsgs: ChatMsg[] = [];
+
+    for (const ev of newEvents) {
+      const ts = fmtTs(ev.timestamp as string | undefined);
+
+      if (ev.type === "reprompt") {
+        newMsgs.push({
+          role: "rep",
+          orig: (ev.original as string) ?? "",
+          refined: (ev.refined as string) ?? "",
+          ts,
+        });
+      } else if (ev.type === "thinking" || ev.type === "ready") {
+        newMsgs.push({ role: "orch", text: ev.text ?? "", ts });
+      } else if (ev.type === "dag_update") {
+        const dag = (ev.dag as OrchestratorTask[]) ?? [];
+        setDagTasks(dag);
+        if (dag.length > 0) {
+          newMsgs.push({ role: "orch", text: dagSummary(dag), ts });
+        }
+      } else if (ev.type === "contract_update") {
+        const file = (ev.file as string) ?? "contract";
+        newMsgs.push({ role: "orch", text: `Contract written: ${file}`, ts });
+      } else if (ev.type === "memory_update") {
+        const additions = (ev.additions as string[]) ?? [];
+        newMsgs.push({
+          role: "orch",
+          text: `Global memory updated:\n${additions.map((a) => `— ${a}`).join("\n")}`,
+          ts,
+        });
+      } else if (ev.type === "error") {
+        newMsgs.push({ role: "orch", text: `Error: ${ev.text ?? "Unknown error"}`, ts });
+      }
+      // skip 'status' (heartbeat) and unknown types
+    }
+
+    if (newMsgs.length > 0) {
+      setChatMessages((prev) => [...prev, ...newMsgs]);
+    }
+  }, [messages]);
+
+  // Reset chat when switching projects
+  useEffect(() => {
+    setChatMessages([]);
+    setDagTasks([]);
+    processedRef.current = messages.length; // skip any old WS events
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id]);
+
+  // Poll live agents when a project is open
+  const pollAgents = useCallback(() => {
+    if (!project) return;
+    listAgents().then(setLiveAgents).catch(() => {});
+  }, [project]);
+
+  useEffect(() => {
+    pollAgents();
+    const iv = setInterval(pollAgents, 3000);
+    return () => clearInterval(iv);
+  }, [pollAgents]);
 
   return (
     <div
@@ -35,7 +259,7 @@ export default function App() {
         className="flex items-center flex-shrink-0"
         style={{
           height: 42,
-          padding: '0 16px',
+          padding: "0 16px",
           borderBottom: `1px solid ${T.bdr}`,
           background: T.bg,
           zIndex: 100,
@@ -45,46 +269,73 @@ export default function App() {
         <div
           className="flex items-center gap-2 cursor-pointer"
           style={{ marginRight: 16 }}
-          onClick={() => { setView('projects'); setProject(null) }}
+          onClick={() => {
+            setView("projects");
+            setProject(null);
+          }}
         >
-          <img src={logoUrl} alt="Alchemistral" style={{ height: 20, width: 20, display: 'block' }} />
+          <img
+            src={logoUrl}
+            alt="Alchemistral"
+            style={{ height: 20, width: 20, display: "block" }}
+          />
           <span
             className="font-mono"
-            style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: T.t }}
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 2.5,
+              color: T.t,
+            }}
           >
-            ALCHEMISTRAL
+            Alchimistral
           </span>
         </div>
 
-        <div style={{ width: 1, height: 16, background: T.bdr, marginRight: 12 }} />
+        <div
+          style={{ width: 1, height: 16, background: T.bdr, marginRight: 12 }}
+        />
 
         {project ? (
           <>
-            {(['room', 'lab'] as const).map((tab) => (
+            {(["room", "lab"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setView(tab)}
                 style={{
-                  padding: '0 12px',
+                  padding: "0 12px",
                   height: 42,
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: view === tab ? `1.5px solid ${T.t}` : '1.5px solid transparent',
+                  background: "transparent",
+                  border: "none",
+                  borderBottom:
+                    view === tab
+                      ? `1.5px solid ${T.t}`
+                      : "1.5px solid transparent",
                   color: view === tab ? T.t : T.t3,
                   fontSize: 11,
                   fontWeight: view === tab ? 600 : 400,
-                  cursor: 'pointer',
+                  cursor: "pointer",
                   fontFamily: T.sans,
-                  textTransform: 'capitalize',
+                  textTransform: "capitalize",
                 }}
               >
-                {tab === 'room' ? 'Room' : 'Lab'}
+                {tab === "room" ? "Room" : "Lab"}
               </button>
             ))}
 
-            <div style={{ width: 1, height: 16, background: T.bdr, margin: '0 12px' }} />
+            <div
+              style={{
+                width: 1,
+                height: 16,
+                background: T.bdr,
+                margin: "0 12px",
+              }}
+            />
 
-            <div className="flex items-center gap-1 font-mono" style={{ fontSize: 10, color: T.t2 }}>
+            <div
+              className="flex items-center gap-1 font-mono"
+              style={{ fontSize: 10, color: T.t2 }}
+            >
               <FolderOpen size={11} style={{ color: T.t3 }} /> {project.name}
             </div>
             <span
@@ -93,12 +344,13 @@ export default function App() {
                 fontSize: 8,
                 color: T.t3,
                 marginLeft: 8,
-                padding: '1px 5px',
+                padding: "1px 5px",
                 border: `1px solid ${T.bdr}`,
                 borderRadius: 2,
               }}
             >
-              <Terminal size={8} style={{ color: T.t3 }} /> {project.cli_adapter}
+              <Terminal size={8} style={{ color: T.t3 }} />{" "}
+              {project.cli_adapter}
             </span>
           </>
         ) : (
@@ -111,9 +363,21 @@ export default function App() {
           {project && (
             <>
               {[
-                { label: `${NODES.length} agents`, Icon: Bot, c: undefined as string | undefined },
-                { label: `${NODES.filter((n) => n.status === 'active').length} active`, Icon: Loader2, c: T.blu },
-                { label: `${WORKTREES.length} worktrees`, Icon: GitBranch, c: T.pur },
+                {
+                  label: `${liveAgents.length} agents`,
+                  Icon: Bot,
+                  c: undefined as string | undefined,
+                },
+                {
+                  label: `${liveAgents.filter((a) => a.status === "active").length} active`,
+                  Icon: Loader2,
+                  c: T.blu,
+                },
+                {
+                  label: `${liveAgents.filter((a) => a.worktree_path).length} worktrees`,
+                  Icon: GitBranch,
+                  c: T.pur,
+                },
               ].map((s) => (
                 <span
                   key={s.label}
@@ -131,19 +395,34 @@ export default function App() {
           <div className="flex items-center gap-1.5">
             <Dot color={connected ? T.grn : T.red} pulse={connected} size={5} />
             <span className="font-mono" style={{ fontSize: 8, color: T.t3 }}>
-              {connected ? 'CONNECTED' : 'OFFLINE'}
+              {connected ? "CONNECTED" : "OFFLINE"}
             </span>
           </div>
+
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex items-center justify-center"
+            style={{
+              width: 24,
+              height: 24,
+              background: "transparent",
+              border: `1px solid ${T.bdr}`,
+              borderRadius: 4,
+              cursor: "pointer",
+            }}
+          >
+            <Settings size={12} style={{ color: T.t3 }} />
+          </button>
 
           <div
             className="flex items-center gap-1 font-mono"
             style={{
-              padding: '3px 8px',
+              padding: "3px 8px",
               borderRadius: 3,
               fontSize: 8,
               fontWeight: 600,
               letterSpacing: 0.8,
-              background: T.grn + '15',
+              background: T.grn + "15",
               border: `1px solid ${T.grn}33`,
               color: T.grn,
             }}
@@ -156,7 +435,7 @@ export default function App() {
             style={{
               width: 24,
               height: 24,
-              borderRadius: '50%',
+              borderRadius: "50%",
               background: T.bg2,
               border: `1px solid ${T.bdr}`,
             }}
@@ -168,26 +447,27 @@ export default function App() {
 
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
-        {!project || view === 'projects' ? (
+        {!project || view === "projects" ? (
           <Projects
             onSelect={(p) => {
-              setProject(p)
-              setView('room')
+              setProject(p);
+              setView("room");
             }}
           />
-        ) : view === 'room' ? (
+        ) : view === "room" ? (
           <Room
             projectId={project.id}
-            onLab={() => setView('lab')}
-            wsMessages={messages}
+            onLab={() => setView("lab")}
+            chatMessages={chatMessages}
+            setChatMessages={setChatMessages}
+            dagTasks={dagTasks}
           />
         ) : (
-          <Lab
-            projectId={project.id}
-            onRoom={() => setView('room')}
-          />
+          <Lab projectId={project.id} onRoom={() => setView("room")} wsMessages={messages} />
         )}
       </div>
+
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
-  )
+  );
 }
