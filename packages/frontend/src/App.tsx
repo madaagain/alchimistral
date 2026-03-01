@@ -11,23 +11,27 @@ import {
   X,
   Eye,
   EyeOff,
+  Sun,
+  Moon,
 } from "lucide-react";
 import logoUrl from "../assets/alchimistral-logo.svg";
-import { T } from "./styles/tokens";
-// data.ts only used by Lab.tsx for mock fallback now
+import { useTheme } from "./hooks/useTheme";
 import { getKeys, updateKeys } from "./api/settings";
 import { listAgents, type AgentInfo } from "./api/agents";
 import { useWebSocket } from "./hooks/useWebSocket";
 import Dot from "./components/Dot";
+import AgentBar from "./components/AgentBar";
+import Welcome from "./views/Welcome";
 import Projects from "./views/Projects";
 import Room, { type ChatMsg } from "./views/Room";
 import Lab from "./views/Lab";
 import type { ApiProject } from "./api/projects";
 import type { OrchestratorTask } from "./api/orchestrator";
 
-type View = "projects" | "room" | "lab";
+type View = "welcome" | "projects" | "room" | "lab";
 
 function SettingsModal({ onClose }: { onClose: () => void }) {
+  const { theme, mode, toggle } = useTheme();
   const [key, setKey] = useState("");
   const [masked, setMasked] = useState("");
   const [showKey, setShowKey] = useState(false);
@@ -39,6 +43,12 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
       .then((k) => setMasked(k.mistral_api_key))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [onClose]);
 
   const handleSave = async () => {
     if (!key.trim()) return;
@@ -64,35 +74,96 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 420,
-          background: T.bg1,
-          border: `1px solid ${T.bdr}`,
+          width: 480,
+          background: theme.bg1,
+          border: `1px solid ${theme.bdr}`,
           borderRadius: 8,
           padding: 24,
         }}
       >
         <div className="flex items-center justify-between" style={{ marginBottom: 20 }}>
-          <span className="font-mono" style={{ fontSize: 12, fontWeight: 600, color: T.t, letterSpacing: 1 }}>
+          <span className="font-mono" style={{ fontSize: 12, fontWeight: 600, color: theme.t, letterSpacing: 1 }}>
             SETTINGS
           </span>
           <button
             onClick={onClose}
             style={{ background: "transparent", border: "none", cursor: "pointer" }}
           >
-            <X size={16} style={{ color: T.t3 }} />
+            <X size={16} style={{ color: theme.t3 }} />
           </button>
         </div>
 
-        <div className="font-mono" style={{ fontSize: 9, color: T.t3, letterSpacing: 1.5, marginBottom: 8 }}>
+        {/* Theme toggle */}
+        <div className="font-mono" style={{ fontSize: 9, color: theme.t3, letterSpacing: 1.5, marginBottom: 8 }}>
+          APPEARANCE
+        </div>
+        <div
+          className="flex items-center justify-between"
+          style={{
+            padding: "10px 12px",
+            background: theme.bg,
+            border: `1px solid ${theme.bdr}`,
+            borderRadius: 6,
+            marginBottom: 20,
+          }}
+        >
+          <span className="font-mono" style={{ fontSize: 10, color: theme.t2 }}>
+            Theme
+          </span>
+          <button
+            onClick={toggle}
+            className="flex items-center gap-2 font-mono"
+            style={{
+              padding: "4px 12px",
+              background: theme.bg2,
+              border: `1px solid ${theme.bdr}`,
+              borderRadius: 4,
+              color: theme.t,
+              fontSize: 10,
+              cursor: "pointer",
+            }}
+          >
+            {mode === "dark" ? <Moon size={12} /> : <Sun size={12} />}
+            {mode === "dark" ? "Dark" : "Light"}
+          </button>
+        </div>
+
+        {/* CLI Status */}
+        <div className="font-mono" style={{ fontSize: 9, color: theme.t3, letterSpacing: 1.5, marginBottom: 8 }}>
+          CLI ADAPTER
+        </div>
+        <div
+          className="flex items-center gap-3"
+          style={{
+            padding: "10px 12px",
+            background: theme.bg,
+            border: `1px solid ${theme.bdr}`,
+            borderRadius: 6,
+            marginBottom: 20,
+          }}
+        >
+          <Terminal size={14} style={{ color: theme.t3 }} />
+          <div>
+            <div className="font-mono" style={{ fontSize: 10, color: theme.t }}>Vibe CLI</div>
+            <div className="font-mono" style={{ fontSize: 8, color: theme.t3 }}>Devstral 2 (123B)</div>
+          </div>
+          <div className="ml-auto flex items-center gap-1">
+            <Dot color={theme.grn} size={5} />
+            <span className="font-mono" style={{ fontSize: 8, color: theme.grn }}>READY</span>
+          </div>
+        </div>
+
+        {/* API Keys */}
+        <div className="font-mono" style={{ fontSize: 9, color: theme.t3, letterSpacing: 1.5, marginBottom: 8 }}>
           API KEYS
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label className="font-mono" style={{ fontSize: 10, color: T.t2, display: "block", marginBottom: 4 }}>
+          <label className="font-mono" style={{ fontSize: 10, color: theme.t2, display: "block", marginBottom: 4 }}>
             Mistral API Key
           </label>
           {masked && !key && (
-            <div className="font-mono" style={{ fontSize: 9, color: T.t3, marginBottom: 4 }}>
+            <div className="font-mono" style={{ fontSize: 9, color: theme.t3, marginBottom: 4 }}>
               Current: {masked}
             </div>
           )}
@@ -102,14 +173,15 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 type={showKey ? "text" : "password"}
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
                 placeholder="Enter new key..."
                 className="font-mono w-full"
                 style={{
-                  background: T.bg,
-                  border: `1px solid ${T.bdr}`,
+                  background: theme.bg,
+                  border: `1px solid ${theme.bdr}`,
                   borderRadius: 4,
                   padding: "8px 32px 8px 10px",
-                  color: T.t,
+                  color: theme.t,
                   fontSize: 11,
                   outline: "none",
                 }}
@@ -127,9 +199,9 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 }}
               >
                 {showKey ? (
-                  <EyeOff size={13} style={{ color: T.t3 }} />
+                  <EyeOff size={13} style={{ color: theme.t3 }} />
                 ) : (
-                  <Eye size={13} style={{ color: T.t3 }} />
+                  <Eye size={13} style={{ color: theme.t3 }} />
                 )}
               </button>
             </div>
@@ -139,10 +211,10 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
               className="font-mono"
               style={{
                 padding: "8px 16px",
-                background: saved ? T.grn + "20" : T.bg2,
-                border: `1px solid ${saved ? T.grn + "44" : T.bdr}`,
+                background: saved ? theme.grn + "20" : theme.bg2,
+                border: `1px solid ${saved ? theme.grn + "44" : theme.bdr}`,
                 borderRadius: 4,
-                color: saved ? T.grn : T.t,
+                color: saved ? theme.grn : theme.t,
                 fontSize: 10,
                 cursor: key.trim() ? "pointer" : "default",
                 opacity: key.trim() ? 1 : 0.5,
@@ -171,10 +243,12 @@ function dagSummary(dag: OrchestratorTask[]): string {
 }
 
 export default function App() {
-  const [view, setView] = useState<View>("projects");
+  const { theme } = useTheme();
+  const [view, setView] = useState<View>("welcome");
   const [project, setProject] = useState<ApiProject | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [liveAgents, setLiveAgents] = useState<AgentInfo[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const { connected, messages } = useWebSocket("ws://localhost:8000/ws");
 
   // ── App-level chat state (persists across view switches) ──────────────
@@ -218,10 +292,11 @@ export default function App() {
           text: `Global memory updated:\n${additions.map((a) => `— ${a}`).join("\n")}`,
           ts,
         });
+      } else if (ev.type === "assistant") {
+        newMsgs.push({ role: "orch", text: ev.text ?? "", ts });
       } else if (ev.type === "error") {
         newMsgs.push({ role: "orch", text: `Error: ${ev.text ?? "Unknown error"}`, ts });
       }
-      // skip 'status' (heartbeat) and unknown types
     }
 
     if (newMsgs.length > 0) {
@@ -229,30 +304,37 @@ export default function App() {
     }
   }, [messages]);
 
-  // Reset chat when switching projects
+  // Reset all state when switching projects
   useEffect(() => {
     setChatMessages([]);
     setDagTasks([]);
-    processedRef.current = messages.length; // skip any old WS events
+    setLiveAgents([]);
+    setSelectedAgent(null);
+    processedRef.current = messages.length;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id]);
 
-  // Poll live agents when a project is open
+  // Poll live agents when a project is open (scoped by project_id)
   const pollAgents = useCallback(() => {
     if (!project) return;
-    listAgents().then(setLiveAgents).catch(() => {});
+    listAgents(project.id).then(setLiveAgents).catch(() => {});
   }, [project]);
 
   useEffect(() => {
     pollAgents();
-    const iv = setInterval(pollAgents, 3000);
+    const iv = setInterval(pollAgents, 5000);
     return () => clearInterval(iv);
   }, [pollAgents]);
+
+  // Welcome screen
+  if (view === "welcome") {
+    return <Welcome onEnter={() => setView("projects")} />;
+  }
 
   return (
     <div
       className="h-screen flex flex-col overflow-hidden"
-      style={{ background: T.bg, color: T.t, fontFamily: T.sans }}
+      style={{ background: theme.bg, color: theme.t, fontFamily: theme.sans }}
     >
       {/* Top Bar */}
       <div
@@ -260,8 +342,8 @@ export default function App() {
         style={{
           height: 42,
           padding: "0 16px",
-          borderBottom: `1px solid ${T.bdr}`,
-          background: T.bg,
+          borderBottom: `1px solid ${theme.bdr}`,
+          background: theme.bg,
           zIndex: 100,
         }}
       >
@@ -285,7 +367,7 @@ export default function App() {
               fontSize: 11,
               fontWeight: 700,
               letterSpacing: 2.5,
-              color: T.t,
+              color: theme.t,
             }}
           >
             Alchimistral
@@ -293,7 +375,7 @@ export default function App() {
         </div>
 
         <div
-          style={{ width: 1, height: 16, background: T.bdr, marginRight: 12 }}
+          style={{ width: 1, height: 16, background: theme.bdr, marginRight: 12 }}
         />
 
         {project ? (
@@ -309,13 +391,13 @@ export default function App() {
                   border: "none",
                   borderBottom:
                     view === tab
-                      ? `1.5px solid ${T.t}`
+                      ? `1.5px solid ${theme.t}`
                       : "1.5px solid transparent",
-                  color: view === tab ? T.t : T.t3,
+                  color: view === tab ? theme.t : theme.t3,
                   fontSize: 11,
                   fontWeight: view === tab ? 600 : 400,
                   cursor: "pointer",
-                  fontFamily: T.sans,
+                  fontFamily: theme.sans,
                   textTransform: "capitalize",
                 }}
               >
@@ -327,34 +409,34 @@ export default function App() {
               style={{
                 width: 1,
                 height: 16,
-                background: T.bdr,
+                background: theme.bdr,
                 margin: "0 12px",
               }}
             />
 
             <div
               className="flex items-center gap-1 font-mono"
-              style={{ fontSize: 10, color: T.t2 }}
+              style={{ fontSize: 10, color: theme.t2 }}
             >
-              <FolderOpen size={11} style={{ color: T.t3 }} /> {project.name}
+              <FolderOpen size={11} style={{ color: theme.t3 }} /> {project.name}
             </div>
             <span
               className="flex items-center gap-1 font-mono"
               style={{
                 fontSize: 8,
-                color: T.t3,
+                color: theme.t3,
                 marginLeft: 8,
                 padding: "1px 5px",
-                border: `1px solid ${T.bdr}`,
+                border: `1px solid ${theme.bdr}`,
                 borderRadius: 2,
               }}
             >
-              <Terminal size={8} style={{ color: T.t3 }} />{" "}
+              <Terminal size={8} style={{ color: theme.t3 }} />{" "}
               {project.cli_adapter}
             </span>
           </>
         ) : (
-          <span className="font-mono" style={{ fontSize: 10, color: T.t3 }}>
+          <span className="font-mono" style={{ fontSize: 10, color: theme.t3 }}>
             SELECT A PROJECT
           </span>
         )}
@@ -371,30 +453,30 @@ export default function App() {
                 {
                   label: `${liveAgents.filter((a) => a.status === "active").length} active`,
                   Icon: Loader2,
-                  c: T.blu,
+                  c: theme.blu,
                 },
                 {
                   label: `${liveAgents.filter((a) => a.worktree_path).length} worktrees`,
                   Icon: GitBranch,
-                  c: T.pur,
+                  c: theme.pur,
                 },
               ].map((s) => (
                 <span
                   key={s.label}
                   className="flex items-center gap-1 font-mono"
-                  style={{ fontSize: 9, color: s.c ?? T.t3 }}
+                  style={{ fontSize: 9, color: s.c ?? theme.t3 }}
                 >
-                  <s.Icon size={10} style={{ color: s.c ?? T.t3 }} /> {s.label}
+                  <s.Icon size={10} style={{ color: s.c ?? theme.t3 }} /> {s.label}
                 </span>
               ))}
-              <div style={{ width: 1, height: 16, background: T.bdr }} />
+              <div style={{ width: 1, height: 16, background: theme.bdr }} />
             </>
           )}
 
           {/* Connection status */}
           <div className="flex items-center gap-1.5">
-            <Dot color={connected ? T.grn : T.red} pulse={connected} size={5} />
-            <span className="font-mono" style={{ fontSize: 8, color: T.t3 }}>
+            <Dot color={connected ? theme.grn : theme.red} pulse={connected} size={5} />
+            <span className="font-mono" style={{ fontSize: 8, color: theme.t3 }}>
               {connected ? "CONNECTED" : "OFFLINE"}
             </span>
           </div>
@@ -406,12 +488,12 @@ export default function App() {
               width: 24,
               height: 24,
               background: "transparent",
-              border: `1px solid ${T.bdr}`,
+              border: `1px solid ${theme.bdr}`,
               borderRadius: 4,
               cursor: "pointer",
             }}
           >
-            <Settings size={12} style={{ color: T.t3 }} />
+            <Settings size={12} style={{ color: theme.t3 }} />
           </button>
 
           <div
@@ -422,12 +504,12 @@ export default function App() {
               fontSize: 8,
               fontWeight: 600,
               letterSpacing: 0.8,
-              background: T.grn + "15",
-              border: `1px solid ${T.grn}33`,
-              color: T.grn,
+              background: theme.grn + "15",
+              border: `1px solid ${theme.grn}33`,
+              color: theme.grn,
             }}
           >
-            <Play size={8} style={{ color: T.grn }} /> DEMO
+            <Play size={8} style={{ color: theme.grn }} /> DEMO
           </div>
 
           <div
@@ -436,34 +518,48 @@ export default function App() {
               width: 24,
               height: 24,
               borderRadius: "50%",
-              background: T.bg2,
-              border: `1px solid ${T.bdr}`,
+              background: theme.bg2,
+              border: `1px solid ${theme.bdr}`,
             }}
           >
-            <User size={12} style={{ color: T.t3 }} />
+            <User size={12} style={{ color: theme.t3 }} />
           </div>
         </div>
       </div>
 
       {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
-        {!project || view === "projects" ? (
-          <Projects
-            onSelect={(p) => {
-              setProject(p);
-              setView("room");
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex overflow-hidden">
+          {!project || view === "projects" ? (
+            <Projects
+              onSelect={(p) => {
+                setProject(p);
+                setView("room");
+              }}
+            />
+          ) : view === "room" ? (
+            <Room
+              projectId={project.id}
+              onLab={() => setView("lab")}
+              chatMessages={chatMessages}
+              setChatMessages={setChatMessages}
+              dagTasks={dagTasks}
+            />
+          ) : (
+            <Lab projectId={project.id} onRoom={() => setView("room")} wsMessages={messages} />
+          )}
+        </div>
+
+        {/* Agent Status Bar — visible when a project is open */}
+        {project && (view === "room" || view === "lab") && (
+          <AgentBar
+            agents={liveAgents}
+            selectedAgent={selectedAgent}
+            onSelectAgent={(id) => {
+              setSelectedAgent(id);
+              setView("lab");
             }}
           />
-        ) : view === "room" ? (
-          <Room
-            projectId={project.id}
-            onLab={() => setView("lab")}
-            chatMessages={chatMessages}
-            setChatMessages={setChatMessages}
-            dagTasks={dagTasks}
-          />
-        ) : (
-          <Lab projectId={project.id} onRoom={() => setView("room")} wsMessages={messages} />
         )}
       </div>
 

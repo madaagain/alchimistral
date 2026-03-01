@@ -20,6 +20,7 @@ async def execute_dag(
     alch_dir: str,
     broadcast: Callable[[dict], Awaitable[None]],
     cli_adapter_name: str = "vibe",
+    project_id: str = "",
 ) -> None:
     """
     Execute a DAG of agent tasks with dependency resolution.
@@ -120,6 +121,7 @@ async def execute_dag(
                 alch_dir=alch_dir,
                 broadcast=broadcast,
                 cli_adapter_name=cli_adapter_name,
+                project_id=project_id,
             )
 
             # Create a future that waits for this agent to finish

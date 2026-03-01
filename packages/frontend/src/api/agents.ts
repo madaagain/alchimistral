@@ -2,6 +2,7 @@ const BASE = 'http://localhost:8000'
 
 export interface AgentInfo {
   id: string
+  project_id: string
   domain: string
   label: string
   status: 'pending' | 'spawning' | 'active' | 'validating' | 'done' | 'failed'
@@ -14,8 +15,9 @@ export interface AgentInfo {
   error: string | null
 }
 
-export async function listAgents(): Promise<AgentInfo[]> {
-  const r = await fetch(`${BASE}/api/agents`)
+export async function listAgents(projectId?: string): Promise<AgentInfo[]> {
+  const params = projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''
+  const r = await fetch(`${BASE}/api/agents${params}`)
   if (!r.ok) return []
   return r.json()
 }

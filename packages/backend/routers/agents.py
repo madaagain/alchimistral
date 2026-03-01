@@ -13,15 +13,15 @@ router = APIRouter(prefix="/api/agents", tags=["agents"])
 
 
 @router.get("")
-async def list_agents():
-    """List all agents with their current status."""
-    return agent_manager.list_agents()
+async def list_agents(project_id: str | None = None):
+    """List agents, optionally filtered by project_id."""
+    return agent_manager.list_agents(project_id=project_id)
 
 
 @router.get("/{agent_id}")
-async def get_agent(agent_id: str):
+async def get_agent(agent_id: str, project_id: str | None = None):
     """Get detailed info for a single agent."""
-    state = agent_manager.get_agent(agent_id)
+    state = agent_manager.get_agent(agent_id, project_id=project_id)
     if not state:
         raise HTTPException(404, f"Agent not found: {agent_id}")
     return state.to_dict()

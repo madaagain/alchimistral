@@ -23,7 +23,7 @@ def build_prompt(
     Build a full agent prompt for the given domain.
 
     Args:
-        agent_domain: One of 'frontend', 'backend', 'security'
+        agent_domain: One of 'frontend', 'backend', 'security', 'infra'
         task_prompt: The specific task for this agent
         alch_dir: Path to the project's .alchemistral/ directory
         skills: List of skill names attached to this agent
@@ -52,6 +52,7 @@ def build_prompt(
         "frontend": _build_frontend,
         "backend": _build_backend,
         "security": _build_security,
+        "infra": _build_infra,
     }
 
     builder = builders.get(agent_domain, _build_generic)
@@ -172,6 +173,44 @@ YOUR TASK:
 Check for: injection, exposed secrets, broken auth, insecure deps.
 Return: severity, location, remediation.
 Update .alchemistral/agents/security.md with your findings."""
+
+
+def _build_infra(
+    task_prompt: str,
+    global_md: str,
+    domain_memory: str,
+    contracts_text: str,
+    skills_text: str,
+    todos_text: str,
+) -> str:
+    return f"""\
+You are Alchemistral's Infra Agent working in this directory.
+You own Docker, CI/CD, deployment. Never touch application code.
+
+Read these files first:
+- .alchemistral/GLOBAL.md (conventions)
+- .alchemistral/agents/infra.md (your domain state)
+
+=== GLOBAL MEMORY ===
+{global_md}
+
+=== YOUR DOMAIN MEMORY ===
+{domain_memory}
+
+=== CONTRACTS ===
+{contracts_text}
+
+Your active skills: {skills_text}
+Your current todos:
+{todos_text}
+
+YOUR TASK:
+{task_prompt}
+
+RULES:
+1. After every significant change, validate your configurations
+2. Only report DONE if validation passes
+3. Update .alchemistral/agents/infra.md with what you did"""
 
 
 def _build_generic(

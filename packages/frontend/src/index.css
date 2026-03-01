@@ -46,6 +46,18 @@ body {
   to { transform: rotate(360deg); }
 }
 
+@keyframes pixel-shift {
+  0%, 100% { opacity: 0.15; transform: scale(1); }
+  25% { opacity: 0.5; transform: scale(1.2); }
+  50% { opacity: 0.25; transform: scale(1); }
+  75% { opacity: 0.6; transform: scale(1.1); }
+}
+
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
 textarea {
   resize: none;
 }

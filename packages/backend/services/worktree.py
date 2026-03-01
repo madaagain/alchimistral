@@ -23,6 +23,20 @@ async def _run_git(cwd: str, *args: str) -> tuple[int, str, str]:
     return proc.returncode, stdout.decode(), stderr.decode()
 
 
+async def _ensure_head(project_path: str) -> None:
+    """Ensure HEAD exists by creating an initial commit if needed."""
+    rc, _, _ = await _run_git(project_path, "rev-parse", "HEAD")
+    if rc != 0:
+        logger.info(f"No HEAD in {project_path} — creating initial commit")
+        await _run_git(project_path, "add", "-A")
+        rc2, _, err2 = await _run_git(
+            project_path,
+            "commit", "--allow-empty", "-m", "initial commit",
+        )
+        if rc2 != 0:
+            raise RuntimeError(f"Failed to create initial commit: {err2}")
+
+
 async def create_worktree(project_path: str, agent_id: str) -> str:
     """
     Create a git worktree for an agent.
@@ -36,6 +50,9 @@ async def create_worktree(project_path: str, agent_id: str) -> str:
     if wt_dir.exists():
         logger.info(f"Worktree already exists: {wt_dir}")
         return str(wt_dir)
+
+    # Ensure the repo has at least one commit (HEAD must exist for worktrees)
+    await _ensure_head(project_path)
 
     wt_dir.parent.mkdir(parents=True, exist_ok=True)
 

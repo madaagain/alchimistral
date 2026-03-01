@@ -47,8 +47,13 @@ Respond in this exact JSON format (no markdown, no code block, raw JSON only):
   }
 }
 
+CRITICAL: Read the codebase summary carefully. Your tasks MUST match the actual project stack. \
+If the project is C++, never create TypeScript tasks. If it has CMakeLists.txt, the build system \
+is CMake. Reference ACTUAL files from the scan, not imaginary ones. If the project uses Python, \
+agents must run pytest. If it uses Node.js, agents must run npm test.
+
 Rules:
-- agent_domain must be one of: frontend, backend, security
+- agent_domain must be one of: frontend, backend, security, infra
 - agent_type must be one of: parent, child
 - Tasks with no dependencies can run in parallel
 - Child tasks depend on their parent being started first
@@ -185,6 +190,7 @@ async def orchestrate(
     global_memory: str,
     architecture: str,
     contracts: list[str],
+    codebase_summary: str = "",
 ) -> dict:
     """Decompose a refined prompt into a DAG plan. Falls back to mock on any failure."""
     client = get_client()
@@ -197,6 +203,7 @@ async def orchestrate(
 
     ctx_parts = [
         f"Global memory:\n{global_memory}" if global_memory.strip() else "",
+        f"Codebase scan:\n{codebase_summary}" if codebase_summary.strip() else "",
         f"Architecture:\n{architecture}" if architecture.strip() not in ("", "{}") else "",
         ("Existing contracts:\n" + "\n\n".join(contracts)) if contracts else "",
         f"Mission:\n{refined_prompt}",

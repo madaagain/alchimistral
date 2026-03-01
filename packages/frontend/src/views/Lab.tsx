@@ -6,8 +6,8 @@ import {
   Layers,
   GitBranch,
   Terminal,
-  Shield,
   ShieldCheck,
+  Shield,
   Scan,
   GitMerge,
   Plus,
@@ -21,16 +21,16 @@ import {
   Ban,
   Circle,
 } from 'lucide-react'
-import { T, STATUS_COLORS } from '../styles/tokens'
+import { useTheme, STATUS_COLORS } from '../hooks/useTheme'
 import Tag from '../components/Tag'
 import Dot from '../components/Dot'
-import { NODES as MOCK_NODES, EDGES as MOCK_EDGES, WORKTREES, type AgentNode } from '../styles/data'
+import { type AgentNode } from '../styles/data'
 import type { WsEvent } from '../hooks/useWebSocket'
 
 const NODE_WIDTH = 240
 
 function StatusIcon({ status, size = 10 }: { status: string; size?: number }) {
-  const color = STATUS_COLORS[status] || T.t3
+  const color = STATUS_COLORS[status] || '#444'
   switch (status) {
     case 'done': return <CheckCircle2 size={size} style={{ color }} />
     case 'active': return <Loader2 size={size} style={{ color }} />
@@ -41,15 +41,16 @@ function StatusIcon({ status, size = 10 }: { status: string; size?: number }) {
 }
 
 function SkillBadge({ name }: { name: string }) {
+  const { theme } = useTheme()
   return (
     <span
       className="font-mono"
       style={{
         fontSize: 7,
         fontWeight: 500,
-        color: T.cyn,
-        background: T.cyn + '12',
-        border: `1px solid ${T.cyn}22`,
+        color: theme.cyn,
+        background: theme.cyn + '12',
+        border: `1px solid ${theme.cyn}22`,
         padding: '1px 4px',
         borderRadius: 2,
       }}
@@ -60,8 +61,9 @@ function SkillBadge({ name }: { name: string }) {
 }
 
 function ValidationBadge({ v }: { v: AgentNode['validation'] }) {
+  const { theme } = useTheme()
   if (!v) return null
-  const c = v.status === 'pass' ? T.grn : v.status === 'running' ? T.amb : T.t3
+  const c = v.status === 'pass' ? theme.grn : v.status === 'running' ? theme.amb : theme.t3
   return (
     <div className="flex items-center gap-0.5 font-mono" style={{ fontSize: 7, color: c }}>
       {v.status === 'pass' ? (
@@ -69,12 +71,13 @@ function ValidationBadge({ v }: { v: AgentNode['validation'] }) {
       ) : (
         <Loader2 size={9} style={{ color: c }} />
       )}
-      L{v.level} <span style={{ color: T.t3 }}>{v.status.toUpperCase()}</span>
+      L{v.level} <span style={{ color: theme.t3 }}>{v.status.toUpperCase()}</span>
     </div>
   )
 }
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme()
   return (
     <div
       className="font-mono uppercase"
@@ -82,7 +85,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
         fontSize: 8,
         fontWeight: 600,
         letterSpacing: 2,
-        color: T.t3,
+        color: theme.t3,
         marginBottom: 8,
         marginTop: 16,
       }}
@@ -106,7 +109,8 @@ function CanvasNode({
   onDrag: (id: string, x: number, y: number) => void
   zoom: number
 }) {
-  const sc = STATUS_COLORS[node.status] || T.t3
+  const { theme } = useTheme()
+  const sc = STATUS_COLORS[node.status] || theme.t3
   const dragging = useRef(false)
   const startPos = useRef({ mx: 0, my: 0, nx: 0, ny: 0 })
 
@@ -157,31 +161,32 @@ function CanvasNode({
             textAlign: 'center',
             fontSize: 7,
             letterSpacing: 3,
-            color: T.t3,
+            color: theme.t3,
             marginBottom: 4,
           }}
         >
-          <Hexagon size={10} style={{ color: T.t3 }} /> ORCHESTRATOR
+          <Hexagon size={10} style={{ color: theme.t3 }} /> ORCHESTRATOR
         </div>
       )}
       <div
         style={{
-          background: selected ? T.bg2 : T.bg1,
-          border: `1px solid ${selected ? 'rgba(255,255,255,.2)' : T.bdr}`,
+          background: selected ? theme.bg2 : theme.bg1,
+          border: `1px solid ${selected ? theme.t3 : theme.bdr}`,
           borderRadius: 6,
           overflow: 'hidden',
           boxShadow: selected
-            ? '0 0 0 1px rgba(255,255,255,.1),0 8px 24px rgba(0,0,0,.7)'
+            ? `0 0 0 1px ${theme.bdr},0 8px 24px rgba(0,0,0,.7)`
             : '0 2px 8px rgba(0,0,0,.4)',
+          transition: 'border-color 150ms ease, box-shadow 150ms ease',
         }}
       >
         {/* Header */}
         <div
           className="flex items-center gap-1.5"
-          style={{ padding: '7px 10px', borderBottom: `1px solid ${T.bdr}` }}
+          style={{ padding: '7px 10px', borderBottom: `1px solid ${theme.bdr}` }}
         >
           <Dot color={sc} pulse={node.status === 'active' || node.status === 'blocked'} />
-          <span className="flex-1" style={{ fontSize: 11, fontWeight: 600, color: T.t, fontFamily: T.sans }}>
+          <span className="flex-1" style={{ fontSize: 11, fontWeight: 600, color: theme.t, fontFamily: theme.sans }}>
             {node.label}
           </span>
           <Tag color={sc}>{node.status.toUpperCase()}</Tag>
@@ -189,7 +194,7 @@ function CanvasNode({
 
         {/* Body */}
         <div style={{ padding: '7px 10px' }}>
-          <div className="font-mono" style={{ fontSize: 8, color: T.t3, marginBottom: 5 }}>
+          <div className="font-mono" style={{ fontSize: 8, color: theme.t3, marginBottom: 5 }}>
             {node.sub}
           </div>
 
@@ -202,7 +207,7 @@ function CanvasNode({
           <div
             style={{
               fontSize: 9,
-              color: T.t2,
+              color: theme.t2,
               lineHeight: 1.5,
               marginBottom: 5,
               minHeight: 20,
@@ -216,7 +221,7 @@ function CanvasNode({
           </div>
 
           {node.progress !== null && node.progress > 0 && (
-            <div style={{ height: 1.5, background: T.bg3, borderRadius: 1, overflow: 'hidden', marginBottom: 4 }}>
+            <div style={{ height: 1.5, background: theme.bg3, borderRadius: 1, overflow: 'hidden', marginBottom: 4 }}>
               <div
                 style={{
                   height: '100%',
@@ -230,13 +235,13 @@ function CanvasNode({
 
           <div
             className="flex justify-between items-center font-mono"
-            style={{ fontSize: 7.5, color: T.t3 }}
+            style={{ fontSize: 7.5, color: theme.t3 }}
           >
             <span>{node.tokens} tok</span>
             <ValidationBadge v={node.validation} />
             {node.worktree && (
-              <span className="flex items-center gap-0.5" style={{ color: T.t4, fontSize: 7 }}>
-                <GitBranch size={8} style={{ color: T.t4 }} /> wt
+              <span className="flex items-center gap-0.5" style={{ color: theme.t4, fontSize: 7 }}>
+                <GitBranch size={8} style={{ color: theme.t4 }} /> wt
               </span>
             )}
           </div>
@@ -247,11 +252,24 @@ function CanvasNode({
 }
 
 function EdgesLayer({ nodes, edges }: { nodes: AgentNode[]; edges: { from: string; to: string }[] }) {
+  const { theme } = useTheme()
   const nodeMap: Record<string, AgentNode> = {}
   nodes.forEach((n) => (nodeMap[n.id] = n))
 
   return (
     <svg className="absolute inset-0 overflow-visible pointer-events-none">
+      <defs>
+        <marker
+          id="arrowhead"
+          markerWidth="6"
+          markerHeight="4"
+          refX="5"
+          refY="2"
+          orient="auto"
+        >
+          <polygon points="0 0, 6 2, 0 4" fill={theme.t3} opacity={0.3} />
+        </marker>
+      </defs>
       {edges.map((e, i) => {
         const f = nodeMap[e.from]
         const t = nodeMap[e.to]
@@ -266,9 +284,10 @@ function EdgesLayer({ nodes, edges }: { nodes: AgentNode[]; edges: { from: strin
             key={i}
             d={`M${fx},${fy} C${fx},${cy} ${tx},${cy} ${tx},${ty}`}
             fill="none"
-            stroke="rgba(255,255,255,.06)"
+            stroke={theme.t3}
             strokeWidth={1}
-            strokeDasharray="3 5"
+            strokeOpacity={0.2}
+            markerEnd="url(#arrowhead)"
           />
         )
       })}
@@ -276,7 +295,6 @@ function EdgesLayer({ nodes, edges }: { nodes: AgentNode[]; edges: { from: strin
   )
 }
 
-// Build edges from live agent nodes (orch → parent agents)
 function buildLiveEdges(nodes: AgentNode[]): { from: string; to: string }[] {
   const edges: { from: string; to: string }[] = []
   const orch = nodes.find((n) => n.type === 'orch')
@@ -288,7 +306,6 @@ function buildLiveEdges(nodes: AgentNode[]): { from: string; to: string }[] {
   return edges
 }
 
-// Map backend agent status to UI node status
 function mapStatus(status: string): string {
   switch (status) {
     case 'spawning': return 'active'
@@ -300,9 +317,7 @@ function mapStatus(status: string): string {
   }
 }
 
-// Position agents in a grid layout
 function positionNodes(agents: AgentNode[]): AgentNode[] {
-  // Orch node at center top
   const orch = agents.find((n) => n.type === 'orch')
   const parents = agents.filter((n) => n.type === 'parent')
   const totalWidth = parents.length * 280
@@ -325,7 +340,8 @@ interface LabProps {
   wsMessages?: WsEvent[]
 }
 
-export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
+export default function Lab({ projectId, onRoom, wsMessages = [] }: LabProps) {
+  const { theme } = useTheme()
   const [liveNodes, setLiveNodes] = useState<AgentNode[]>([])
   const [liveStream, setLiveStream] = useState<Record<string, string[]>>({})
   const processedRef = useRef(0)
@@ -343,7 +359,6 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
       if (type === 'spawn') {
         setLiveNodes((prev) => {
           if (prev.find((n) => n.id === agentId)) return prev
-          // Also ensure orchestrator node exists
           let nodes = [...prev]
           if (!nodes.find((n) => n.type === 'orch')) {
             nodes.push({
@@ -382,7 +397,6 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
             validation: null,
             worktree: `.worktrees/${agentId}/`,
           })
-          // Update orch children
           const orchNode = nodes.find((n) => n.type === 'orch')
           if (orchNode && !orchNode.children.includes(agentId)) {
             orchNode.children = [...orchNode.children, agentId]
@@ -412,7 +426,6 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
           ...prev,
           [agentId]: [...(prev[agentId] || []), text].slice(-50),
         }))
-        // Update progress
         setLiveNodes((prev) =>
           prev.map((n) =>
             n.id === agentId && n.progress !== null
@@ -444,33 +457,21 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
     }
   }, [wsMessages])
 
-  // Use live nodes if we have any, otherwise fall back to mock
-  const hasLiveData = liveNodes.length > 0
-  const [mockNodes, setMockNodes] = useState(MOCK_NODES)
-  const nodes = hasLiveData ? liveNodes : mockNodes
-  const edges = hasLiveData ? buildLiveEdges(liveNodes) : MOCK_EDGES
-  const setNodes = hasLiveData ? setLiveNodes : setMockNodes
+  // Reset when project changes
+  useEffect(() => {
+    setLiveNodes([])
+    setLiveStream({})
+    processedRef.current = 0
+  }, [projectId])
+
+  const nodes = liveNodes
+  const edges = buildLiveEdges(liveNodes)
   const [selected, setSelected] = useState<string | null>(null)
   const [viewport, setViewport] = useState({ x: -20, y: -20, z: 0.85 })
   const [panning, setPanning] = useState(false)
   const [lastMouse, setLastMouse] = useState({ x: 0, y: 0 })
   const [inspectorTab, setInspectorTab] = useState('info')
   const canvasRef = useRef<HTMLDivElement>(null)
-
-  // Simulate progress (only when using mock data)
-  useEffect(() => {
-    if (hasLiveData) return
-    const iv = setInterval(() => {
-      setMockNodes((prev) =>
-        prev.map((n) =>
-          n.status === 'active' && n.progress !== null
-            ? { ...n, progress: Math.min(n.progress + Math.random() * 1.2, 97) }
-            : n,
-        ),
-      )
-    }, 1100)
-    return () => clearInterval(iv)
-  }, [hasLiveData])
 
   // Wheel zoom
   const handleWheel = useCallback((e: WheelEvent) => {
@@ -498,7 +499,7 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
         className="flex-1 relative overflow-hidden"
         style={{
           cursor: panning ? 'grabbing' : 'grab',
-          backgroundImage: 'radial-gradient(circle,rgba(255,255,255,.025) 1px,transparent 1px)',
+          backgroundImage: `radial-gradient(circle,${theme.bdr} 1px,transparent 1px)`,
           backgroundSize: '24px 24px',
         }}
         onMouseDown={(e) => {
@@ -536,7 +537,7 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
               selected={selected === n.id}
               onClick={(id) => setSelected(id)}
               onDrag={(id, x, y) =>
-                setNodes((prev) => prev.map((nd) => (nd.id === id ? { ...nd, x, y } : nd)))
+                setLiveNodes((prev) => prev.map((nd) => (nd.id === id ? { ...nd, x, y } : nd)))
               }
               zoom={viewport.z}
             />
@@ -551,8 +552,8 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
             right: 16,
             width: 140,
             height: 70,
-            background: 'rgba(10,10,10,.95)',
-            border: `1px solid ${T.bdr}`,
+            background: theme.bg1,
+            border: `1px solid ${theme.bdr}`,
             borderRadius: 4,
             overflow: 'hidden',
             zIndex: 40,
@@ -560,7 +561,7 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
         >
           <div
             className="absolute font-mono"
-            style={{ top: 3, left: 5, fontSize: 6, letterSpacing: 2, color: T.t3 }}
+            style={{ top: 3, left: 5, fontSize: 6, letterSpacing: 2, color: theme.t3 }}
           >
             MAP
           </div>
@@ -573,7 +574,7 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
                 top: n.y * 0.08 + 12,
                 width: NODE_WIDTH * 0.08,
                 height: 4,
-                background: STATUS_COLORS[n.status] || T.bg3,
+                background: STATUS_COLORS[n.status] || theme.bg3,
                 borderRadius: 1,
                 opacity: 0.6,
               }}
@@ -595,13 +596,13 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
               style={{
                 width: 28,
                 height: 28,
-                background: T.bg1,
-                border: `1px solid ${T.bdr}`,
+                background: theme.bg1,
+                border: `1px solid ${theme.bdr}`,
                 borderRadius: 5,
                 cursor: 'pointer',
               }}
             >
-              <b.Icon size={13} style={{ color: T.t2 }} />
+              <b.Icon size={13} style={{ color: theme.t2 }} />
             </button>
           ))}
           <div
@@ -609,11 +610,11 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
             style={{
               padding: '0 8px',
               height: 28,
-              background: T.bg1,
-              border: `1px solid ${T.bdr}`,
+              background: theme.bg1,
+              border: `1px solid ${theme.bdr}`,
               borderRadius: 5,
               fontSize: 9,
-              color: T.t3,
+              color: theme.t3,
             }}
           >
             {Math.round(viewport.z * 100)}%
@@ -626,15 +627,15 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
         className="flex flex-col flex-shrink-0"
         style={{
           width: 290,
-          background: T.bg1,
-          borderLeft: `1px solid ${T.bdr}`,
-          fontFamily: T.sans,
+          background: theme.bg1,
+          borderLeft: `1px solid ${theme.bdr}`,
+          fontFamily: theme.sans,
         }}
       >
         {/* Inspector header */}
         <div
           className="flex items-center justify-between flex-shrink-0"
-          style={{ padding: '8px 14px', borderBottom: `1px solid ${T.bdr}` }}
+          style={{ padding: '8px 14px', borderBottom: `1px solid ${theme.bdr}` }}
         >
           <button
             onClick={onRoom}
@@ -642,15 +643,15 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
             style={{
               background: 'transparent',
               border: 'none',
-              color: T.t3,
+              color: theme.t3,
               cursor: 'pointer',
               fontSize: 10,
               padding: 0,
             }}
           >
-            <ArrowLeft size={12} style={{ color: T.t3 }} /> Room
+            <ArrowLeft size={12} style={{ color: theme.t3 }} /> Room
           </button>
-          <span className="font-mono" style={{ fontSize: 8, color: T.t3, letterSpacing: 1 }}>
+          <span className="font-mono" style={{ fontSize: 8, color: theme.t3, letterSpacing: 1 }}>
             INSPECTOR
           </span>
         </div>
@@ -658,7 +659,7 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
         {selectedNode ? (
           <>
             {/* Inspector tabs */}
-            <div className="flex flex-shrink-0" style={{ borderBottom: `1px solid ${T.bdr}` }}>
+            <div className="flex flex-shrink-0" style={{ borderBottom: `1px solid ${theme.bdr}` }}>
               {[
                 { id: 'info', Icon: Bot },
                 { id: 'skills', Icon: Layers },
@@ -673,8 +674,8 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
                     padding: '8px 0',
                     background: 'transparent',
                     border: 'none',
-                    borderBottom: inspectorTab === tab.id ? `1.5px solid ${T.t}` : '1.5px solid transparent',
-                    color: inspectorTab === tab.id ? T.t : T.t3,
+                    borderBottom: inspectorTab === tab.id ? `1.5px solid ${theme.t}` : '1.5px solid transparent',
+                    color: inspectorTab === tab.id ? theme.t : theme.t3,
                     cursor: 'pointer',
                     fontSize: 8,
                   }}
@@ -703,20 +704,20 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
                       : selectedNode.type === 'parent' ? 'PARENT AGENT'
                         : selectedNode.type === 'sec' ? 'SECURITY' : 'CHILD'}
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: T.t, marginBottom: 3 }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: theme.t, marginBottom: 3 }}>
                     {selectedNode.label}
                   </div>
-                  <div className="font-mono" style={{ fontSize: 9, color: T.t3, marginBottom: 12 }}>
+                  <div className="font-mono" style={{ fontSize: 9, color: theme.t3, marginBottom: 12 }}>
                     {selectedNode.sub}
                   </div>
                   <div
                     style={{
                       padding: '9px 10px',
-                      background: T.bg,
-                      border: `1px solid ${T.bdr}`,
+                      background: theme.bg,
+                      border: `1px solid ${theme.bdr}`,
                       borderRadius: 4,
                       fontSize: 10.5,
-                      color: T.t2,
+                      color: theme.t2,
                       lineHeight: 1.6,
                       marginBottom: 12,
                     }}
@@ -736,14 +737,14 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
                       className="flex justify-between font-mono"
                       style={{
                         padding: '6px 0',
-                        borderBottom: `1px solid ${T.bdr}`,
+                        borderBottom: `1px solid ${theme.bdr}`,
                         fontSize: 10,
                       }}
                     >
-                      <span style={{ color: T.t3 }}>{k}</span>
+                      <span style={{ color: theme.t3 }}>{k}</span>
                       <span
                         style={{
-                          color: c || T.t,
+                          color: c || theme.t,
                           fontWeight: 500,
                           fontSize: 9,
                           maxWidth: 155,
@@ -764,25 +765,25 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
                       <div
                         style={{
                           padding: '8px 10px',
-                          background: T.bg,
-                          border: `1px solid ${selectedNode.validation.status === 'pass' ? T.grn + '33' : T.bdr}`,
+                          background: theme.bg,
+                          border: `1px solid ${selectedNode.validation.status === 'pass' ? theme.grn + '33' : theme.bdr}`,
                           borderRadius: 4,
                         }}
                       >
                         <div className="flex justify-between items-center" style={{ marginBottom: 4 }}>
-                          <span className="flex items-center gap-1 font-mono" style={{ fontSize: 9, color: T.t2 }}>
-                            <Shield size={10} style={{ color: T.t2 }} /> Level {selectedNode.validation.level}
+                          <span className="flex items-center gap-1 font-mono" style={{ fontSize: 9, color: theme.t2 }}>
+                            <Shield size={10} style={{ color: theme.t2 }} /> Level {selectedNode.validation.level}
                           </span>
                           <Tag
                             color={
-                              selectedNode.validation.status === 'pass' ? T.grn
-                                : selectedNode.validation.status === 'running' ? T.amb : T.t3
+                              selectedNode.validation.status === 'pass' ? theme.grn
+                                : selectedNode.validation.status === 'running' ? theme.amb : theme.t3
                             }
                           >
                             {selectedNode.validation.status.toUpperCase()}
                           </Tag>
                         </div>
-                        <div className="font-mono" style={{ fontSize: 8.5, color: T.t3, lineHeight: 1.5 }}>
+                        <div className="font-mono" style={{ fontSize: 8.5, color: theme.t3, lineHeight: 1.5 }}>
                           {selectedNode.validation.result}
                         </div>
                       </div>
@@ -793,12 +794,12 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
                     <div style={{ marginTop: 12 }}>
                       <div
                         className="flex justify-between font-mono"
-                        style={{ fontSize: 8.5, color: T.t3, marginBottom: 4 }}
+                        style={{ fontSize: 8.5, color: theme.t3, marginBottom: 4 }}
                       >
                         <span>PROGRESS</span>
                         <span>{Math.round(selectedNode.progress)}%</span>
                       </div>
-                      <div style={{ height: 2, background: T.bg3, borderRadius: 1 }}>
+                      <div style={{ height: 2, background: theme.bg3, borderRadius: 1 }}>
                         <div
                           style={{
                             height: '100%',
@@ -825,25 +826,25 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
                         style={{
                           padding: '8px 10px',
                           marginBottom: 4,
-                          background: T.bg,
-                          border: `1px solid ${T.cyn}15`,
+                          background: theme.bg,
+                          border: `1px solid ${theme.cyn}15`,
                           borderRadius: 4,
                         }}
                       >
                         <div className="flex items-center gap-1.5">
                           <SkillBadge name={s} />
-                          <span style={{ fontSize: 9.5, color: T.t2 }}>context</span>
+                          <span style={{ fontSize: 9.5, color: theme.t2 }}>context</span>
                         </div>
                         <button
                           className="flex"
                           style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
                         >
-                          <X size={12} style={{ color: T.t3 }} />
+                          <X size={12} style={{ color: theme.t3 }} />
                         </button>
                       </div>
                     ))
                   ) : (
-                    <div className="font-mono" style={{ fontSize: 10, color: T.t3 }}>None</div>
+                    <div className="font-mono" style={{ fontSize: 10, color: theme.t3 }}>None</div>
                   )}
                   <SectionHeader>Available</SectionHeader>
                   {['Stripe', 'Figma', 'Docker', 'Security'].map((s) => (
@@ -853,22 +854,22 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
                       style={{
                         padding: '6px 10px',
                         marginBottom: 4,
-                        background: T.bg,
-                        border: `1px solid ${T.bdr}`,
+                        background: theme.bg,
+                        border: `1px solid ${theme.bdr}`,
                         borderRadius: 4,
                       }}
                     >
-                      <span className="font-mono" style={{ fontSize: 9.5, color: T.t3 }}>
+                      <span className="font-mono" style={{ fontSize: 9.5, color: theme.t3 }}>
                         {s}Skill
                       </span>
                       <button
                         className="flex items-center gap-1 font-mono"
                         style={{
                           padding: '2px 8px',
-                          background: T.bg2,
-                          border: `1px solid ${T.bdr}`,
+                          background: theme.bg2,
+                          border: `1px solid ${theme.bdr}`,
                           borderRadius: 3,
-                          color: T.t2,
+                          color: theme.t2,
                           cursor: 'pointer',
                           fontSize: 8,
                         }}
@@ -888,51 +889,51 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
                       className="font-mono"
                       style={{
                         padding: 10,
-                        background: T.bg,
-                        border: `1px solid ${T.bdr}`,
+                        background: theme.bg,
+                        border: `1px solid ${theme.bdr}`,
                         borderRadius: 4,
                         fontSize: 9,
-                        color: T.t2,
+                        color: theme.t2,
                         lineHeight: 1.8,
                       }}
                     >
                       <div className="flex items-center gap-1">
-                        <FolderOpen size={10} style={{ color: T.t3 }} /> path: {selectedNode.worktree}
+                        <FolderOpen size={10} style={{ color: theme.t3 }} /> path: {selectedNode.worktree}
                       </div>
                       <div className="flex items-center gap-1">
-                        <GitBranch size={10} style={{ color: T.blu }} /> branch:{' '}
-                        <span style={{ color: T.blu }}>{selectedNode.branch}</span>
+                        <GitBranch size={10} style={{ color: theme.blu }} /> branch:{' '}
+                        <span style={{ color: theme.blu }}>{selectedNode.branch}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <CheckCircle2 size={10} style={{ color: T.grn }} /> isolated
+                        <CheckCircle2 size={10} style={{ color: theme.grn }} /> isolated
                       </div>
                     </div>
                   ) : (
-                    <div className="font-mono" style={{ fontSize: 10, color: T.t3 }}>No worktree</div>
+                    <div className="font-mono" style={{ fontSize: 10, color: theme.t3 }}>No worktree</div>
                   )}
                   <SectionHeader>All Worktrees</SectionHeader>
-                  {WORKTREES.map((w, i) => (
+                  {nodes.filter((n) => n.worktree).map((n) => (
                     <div
-                      key={i}
+                      key={n.id}
                       className="flex items-center gap-1.5 font-mono"
                       style={{
                         padding: '5px 8px',
                         marginBottom: 3,
-                        background: w.agent === selectedNode.id ? T.bg2 : T.bg,
-                        border: `1px solid ${w.agent === selectedNode.id ? 'rgba(255,255,255,.12)' : T.bdr}`,
+                        background: n.id === selectedNode.id ? theme.bg2 : theme.bg,
+                        border: `1px solid ${n.id === selectedNode.id ? theme.t3 : theme.bdr}`,
                         borderRadius: 3,
                         fontSize: 8,
                       }}
                     >
                       <GitBranch
                         size={9}
-                        style={{ color: w.status.includes('merged') ? T.grn : T.t3 }}
+                        style={{ color: n.status === 'done' ? theme.grn : theme.t3 }}
                       />
                       <div className="flex-1">
-                        <div style={{ color: w.status.includes('merged') ? T.grn : T.t2 }}>
-                          {w.branch}
+                        <div style={{ color: n.status === 'done' ? theme.grn : theme.t2 }}>
+                          {n.branch || `agent/${n.id}`}
                         </div>
-                        <div style={{ color: T.t3, marginTop: 1 }}>{w.status}</div>
+                        <div style={{ color: theme.t3, marginTop: 1 }}>{n.status}</div>
                       </div>
                     </div>
                   ))}
@@ -946,11 +947,11 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
                     className="font-mono"
                     style={{
                       padding: 10,
-                      background: T.bg,
-                      border: `1px solid ${T.bdr}`,
+                      background: theme.bg,
+                      border: `1px solid ${theme.bdr}`,
                       borderRadius: 4,
                       fontSize: 8.5,
-                      color: T.t3,
+                      color: theme.t3,
                       lineHeight: 1.8,
                       minHeight: 200,
                       maxHeight: 400,
@@ -962,11 +963,11 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
                         <div
                           key={i}
                           style={{
-                            color: line.startsWith('$') ? T.grn
-                              : line.includes('pass') || line.includes('PASS') ? T.grn
-                              : line.includes('error') || line.includes('ERROR') ? T.red
-                              : line.includes('Creating') || line.includes('Writing') ? T.cyn
-                              : T.t3,
+                            color: line.startsWith('$') ? theme.grn
+                              : line.includes('pass') || line.includes('PASS') ? theme.grn
+                              : line.includes('error') || line.includes('ERROR') ? theme.red
+                              : line.includes('Creating') || line.includes('Writing') ? theme.cyn
+                              : theme.t3,
                           }}
                         >
                           {line}
@@ -974,18 +975,18 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
                       ))
                     ) : (
                       <>
-                        <div style={{ color: T.grn }}>$ vibe --prompt "..." --auto-approve</div>
+                        <div style={{ color: theme.grn }}>$ vibe --prompt "..." --auto-approve</div>
                         <div>Reading project structure...</div>
                         <div>Found .alchemistral/contracts/api-schema.json</div>
-                        <div style={{ color: T.cyn }}>Creating src/components/AuthForm.tsx</div>
-                        <div style={{ color: T.t2 }}>{'const { useState } = React'}</div>
-                        <div style={{ color: T.t2 }}>{'const auth = useAuthStore()'}</div>
+                        <div style={{ color: theme.cyn }}>Creating src/components/AuthForm.tsx</div>
+                        <div style={{ color: theme.t2 }}>{'const { useState } = React'}</div>
+                        <div style={{ color: theme.t2 }}>{'const auth = useAuthStore()'}</div>
                         <div>...</div>
-                        <div style={{ color: T.grn }}>$ npm run build</div>
-                        <div style={{ color: T.grn }}>Build passed</div>
-                        <div style={{ color: T.grn }}>$ npm test — 8/8</div>
-                        <div className="flex items-center gap-1" style={{ color: T.amb, marginTop: 6 }}>
-                          <ShieldCheck size={10} style={{ color: T.amb }} /> Self-test PASS
+                        <div style={{ color: theme.grn }}>$ npm run build</div>
+                        <div style={{ color: theme.grn }}>Build passed</div>
+                        <div style={{ color: theme.grn }}>$ npm test — 8/8</div>
+                        <div className="flex items-center gap-1" style={{ color: theme.amb, marginTop: 6 }}>
+                          <ShieldCheck size={10} style={{ color: theme.amb }} /> Self-test PASS
                         </div>
                       </>
                     )}
@@ -997,40 +998,40 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
             {/* Inspector actions */}
             <div
               className="flex flex-col gap-1.5 flex-shrink-0"
-              style={{ padding: '10px 14px', borderTop: `1px solid ${T.bdr}` }}
+              style={{ padding: '10px 14px', borderTop: `1px solid ${theme.bdr}` }}
             >
               <button
                 className="flex items-center justify-center gap-1.5 w-full"
                 style={{
                   padding: 8,
                   background: 'transparent',
-                  border: `1px solid ${T.amb}33`,
+                  border: `1px solid ${theme.amb}33`,
                   borderRadius: 5,
-                  color: T.amb,
+                  color: theme.amb,
                   fontSize: 10,
                   fontWeight: 500,
                   cursor: 'pointer',
-                  fontFamily: T.sans,
+                  fontFamily: theme.sans,
                 }}
               >
-                <Scan size={13} style={{ color: T.amb }} /> Security Scan
+                <Scan size={13} style={{ color: theme.amb }} /> Security Scan
               </button>
               {selectedNode.status === 'done' && (
                 <button
                   className="flex items-center justify-center gap-1.5 w-full"
                   style={{
                     padding: 8,
-                    background: T.grn + '15',
-                    border: `1px solid ${T.grn}33`,
+                    background: theme.grn + '15',
+                    border: `1px solid ${theme.grn}33`,
                     borderRadius: 5,
-                    color: T.grn,
+                    color: theme.grn,
                     fontSize: 10,
                     fontWeight: 500,
                     cursor: 'pointer',
-                    fontFamily: T.sans,
+                    fontFamily: theme.sans,
                   }}
                 >
-                  <GitMerge size={13} style={{ color: T.grn }} /> Approve & Merge
+                  <GitMerge size={13} style={{ color: theme.grn }} /> Approve & Merge
                 </button>
               )}
               {selectedNode.type === 'parent' && (
@@ -1039,16 +1040,16 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
                   style={{
                     padding: 8,
                     background: 'transparent',
-                    border: `1px solid ${T.bdr}`,
+                    border: `1px solid ${theme.bdr}`,
                     borderRadius: 5,
-                    color: T.t2,
+                    color: theme.t2,
                     fontSize: 10,
                     fontWeight: 500,
                     cursor: 'pointer',
-                    fontFamily: T.sans,
+                    fontFamily: theme.sans,
                   }}
                 >
-                  <Bot size={13} style={{ color: T.t2 }} /> Spawn Child
+                  <Bot size={13} style={{ color: theme.t2 }} /> Spawn Child
                 </button>
               )}
             </div>
@@ -1056,32 +1057,32 @@ export default function Lab({ onRoom, wsMessages = [] }: LabProps) {
         ) : (
           /* No selection */
           <div className="flex-1 flex flex-col items-center justify-center" style={{ padding: 20 }}>
-            <Scan size={24} style={{ color: T.t3 }} />
-            <div className="font-mono text-center" style={{ fontSize: 11, color: T.t3, marginTop: 8, marginBottom: 20 }}>
+            <Scan size={24} style={{ color: theme.t3 }} />
+            <div className="font-mono text-center" style={{ fontSize: 11, color: theme.t3, marginTop: 8, marginBottom: 20 }}>
               Select a node
             </div>
-            <div className="w-full" style={{ border: `1px solid ${T.bdr}`, borderRadius: 5, overflow: 'hidden' }}>
+            <div className="w-full" style={{ border: `1px solid ${theme.bdr}`, borderRadius: 5, overflow: 'hidden' }}>
               {[
                 { k: 'Agents', v: nodes.length, Icon: Bot },
-                { k: 'Active', v: nodes.filter((n) => n.status === 'active').length, c: T.blu, Icon: Loader2 },
-                { k: 'Review', v: nodes.filter((n) => n.status === 'review').length, c: T.amb, Icon: Eye },
-                { k: 'Done', v: nodes.filter((n) => n.status === 'done').length, c: T.grn, Icon: CheckCircle2 },
-                { k: 'Blocked', v: nodes.filter((n) => n.status === 'blocked').length, c: T.red, Icon: Ban },
-                { k: 'Worktrees', v: WORKTREES.length, c: T.pur, Icon: GitBranch },
+                { k: 'Active', v: nodes.filter((n) => n.status === 'active').length, c: theme.blu, Icon: Loader2 },
+                { k: 'Review', v: nodes.filter((n) => n.status === 'review').length, c: theme.amb, Icon: Eye },
+                { k: 'Done', v: nodes.filter((n) => n.status === 'done').length, c: theme.grn, Icon: CheckCircle2 },
+                { k: 'Blocked', v: nodes.filter((n) => n.status === 'blocked').length, c: theme.red, Icon: Ban },
+                { k: 'Worktrees', v: nodes.filter((n) => n.worktree).length, c: theme.pur, Icon: GitBranch },
               ].map(({ k, v, c, Icon }, i) => (
                 <div
                   key={k}
                   className="flex justify-between items-center font-mono"
                   style={{
                     padding: '8px 12px',
-                    borderBottom: i < 5 ? `1px solid ${T.bdr}` : 'none',
+                    borderBottom: i < 5 ? `1px solid ${theme.bdr}` : 'none',
                     fontSize: 10,
                   }}
                 >
-                  <span className="flex items-center gap-1.5" style={{ color: T.t3 }}>
-                    <Icon size={11} style={{ color: c || T.t3 }} /> {k}
+                  <span className="flex items-center gap-1.5" style={{ color: theme.t3 }}>
+                    <Icon size={11} style={{ color: c || theme.t3 }} /> {k}
                   </span>
-                  <span style={{ color: c || T.t, fontWeight: 600 }}>{v}</span>
+                  <span style={{ color: c || theme.t, fontWeight: 600 }}>{v}</span>
                 </div>
               ))}
             </div>

@@ -3,6 +3,7 @@ Agent Manager — lifecycle management for coding agents.
 
 Handles: spawn → stream output → validate → track state.
 Each agent runs in an isolated git worktree with its own CLI process.
+Agents are scoped by project_id — switching projects shows only that project's agents.
 """
 import asyncio
 import logging
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 class AgentState:
     """Runtime state of a single agent."""
     id: str
+    project_id: str
     domain: str
     label: str
     status: str = "pending"  # pending, spawning, active, validating, done, failed
@@ -37,6 +39,7 @@ class AgentState:
     def to_dict(self) -> dict:
         return {
             "id": self.id,
+            "project_id": self.project_id,
             "domain": self.domain,
             "label": self.label,
             "status": self.status,
@@ -51,21 +54,30 @@ class AgentState:
 
 
 class AgentManager:
-    """Manages all active agents across all projects."""
+    """Manages all active agents, scoped by project."""
 
     def __init__(self) -> None:
-        self._agents: dict[str, AgentState] = {}
+        # agents[project_id][agent_id] = AgentState
+        self._agents: dict[str, dict[str, AgentState]] = {}
         self._tasks: dict[str, asyncio.Task] = {}
 
-    @property
-    def agents(self) -> dict[str, AgentState]:
-        return self._agents
+    def get_agent(self, agent_id: str, project_id: str | None = None) -> AgentState | None:
+        if project_id:
+            return self._agents.get(project_id, {}).get(agent_id)
+        # Fallback: search all projects (used by _stream_loop / _wait_for_agent)
+        for proj_agents in self._agents.values():
+            if agent_id in proj_agents:
+                return proj_agents[agent_id]
+        return None
 
-    def get_agent(self, agent_id: str) -> AgentState | None:
-        return self._agents.get(agent_id)
-
-    def list_agents(self) -> list[dict]:
-        return [a.to_dict() for a in self._agents.values()]
+    def list_agents(self, project_id: str | None = None) -> list[dict]:
+        if project_id:
+            return [a.to_dict() for a in self._agents.get(project_id, {}).values()]
+        # All agents across all projects
+        result = []
+        for proj_agents in self._agents.values():
+            result.extend(a.to_dict() for a in proj_agents.values())
+        return result
 
     async def spawn_agent(
         self,
@@ -78,19 +90,24 @@ class AgentManager:
         broadcast: Callable[[dict], Awaitable[None]],
         cli_adapter_name: str = "vibe",
         skills: list[str] | None = None,
+        project_id: str = "",
     ) -> AgentState:
         """
         Spawn an agent: create worktree, build prompt, launch CLI, stream output.
         """
         state = AgentState(
             id=agent_id,
+            project_id=project_id,
             domain=domain,
             label=label,
             status="spawning",
             prompt=task_prompt,
             started_at=datetime.now(timezone.utc).isoformat(),
         )
-        self._agents[agent_id] = state
+        # Store scoped by project
+        if project_id not in self._agents:
+            self._agents[project_id] = {}
+        self._agents[project_id][agent_id] = state
 
         # Broadcast spawn event
         await broadcast({
@@ -98,6 +115,7 @@ class AgentManager:
             "type": "spawn",
             "domain": domain,
             "label": label,
+            "project_id": project_id,
             "timestamp": state.started_at,
         })
 
@@ -116,7 +134,6 @@ class AgentManager:
             )
 
             # Get CLI adapter
-            # Use mock adapter when DEMO_MODE is set or vibe is not available
             demo = os.getenv("DEMO_MODE", "false").lower() == "true"
             adapter_name = "mock" if demo else cli_adapter_name
             adapter = get_adapter(adapter_name)
@@ -134,6 +151,7 @@ class AgentManager:
                 "status": "active",
                 "worktree": wt_path,
                 "branch": state.branch,
+                "project_id": project_id,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
 
@@ -151,6 +169,7 @@ class AgentManager:
                 "agent_id": agent_id,
                 "type": "error",
                 "text": f"Spawn failed: {exc}",
+                "project_id": project_id,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
 
@@ -163,7 +182,7 @@ class AgentManager:
         broadcast: Callable[[dict], Awaitable[None]],
     ) -> None:
         """Read agent output and broadcast each event."""
-        state = self._agents.get(agent_id)
+        state = self.get_agent(agent_id)
         if not state:
             return
 
@@ -201,7 +220,7 @@ class AgentManager:
         if task and not task.done():
             task.cancel()
 
-        state = self._agents.get(agent_id)
+        state = self.get_agent(agent_id)
         if state:
             state.status = "failed"
             state.error = "Killed by user"
