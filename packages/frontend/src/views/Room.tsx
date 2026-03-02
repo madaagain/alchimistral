@@ -34,7 +34,10 @@ export type RepMsg  = { role: 'rep';  orig: string; refined: string; ts: string 
 export type ValMsg  = { role: 'val';  agent: string; level: number; status: string; detail: string; ts: string }
 export type AgentMsg = { role: 'agent'; agentId: string; eventType: string; text: string; ts: string }
 export type MissionMsg = { role: 'mission'; success: boolean; completed: number; failed: number; total: number; text: string; ts: string }
-export type ChatMsg = DevMsg | SysMsg | OrchMsg | RepMsg | ValMsg | AgentMsg | MissionMsg
+export type MergeMsg = { role: 'merge'; merged: string[]; conflicts: string[]; text: string; ts: string }
+export type DepsMsg = { role: 'deps'; text: string; ts: string }
+export type RunMsg = { role: 'run'; command: string; exitCode: number; output: string; ts: string }
+export type ChatMsg = DevMsg | SysMsg | OrchMsg | RepMsg | ValMsg | AgentMsg | MissionMsg | MergeMsg | DepsMsg | RunMsg
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

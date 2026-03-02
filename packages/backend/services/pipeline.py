@@ -188,6 +188,7 @@ async def _pipeline(
     })
 
     # ── Step 9: Execute DAG — spawn agents with dependency resolution ────
+    run_command = result.get("run_command", "")
     if dag:
         cli_adapter = project.get("cli_adapter", "vibe")
         await execute_dag(
@@ -197,6 +198,7 @@ async def _pipeline(
             broadcast=broadcast,
             cli_adapter_name=cli_adapter,
             project_id=project_id,
+            run_command=run_command,
         )
 
 

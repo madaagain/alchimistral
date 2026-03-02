@@ -179,7 +179,7 @@ function dagSummary(dag: OrchestratorTask[]): string {
 }
 
 export default function App() {
-  const { theme } = useTheme();
+  const { theme, mode } = useTheme();
   const [view, setView] = useState<View>("welcome");
   const [project, setProject] = useState<ApiProject | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -256,6 +256,34 @@ export default function App() {
           ts,
         });
       }
+
+      // ── Merge complete ──
+      if (ev.type === "merge_complete") {
+        newMsgs.push({
+          role: "merge",
+          merged: (ev.merged as string[]) ?? [],
+          conflicts: (ev.conflicts as string[]) ?? [],
+          text: ev.text ?? "Merge complete",
+          ts,
+        });
+        setRefreshTick((t) => t + 1);
+      }
+
+      // ── Deps installed ──
+      if (ev.type === "deps_installed") {
+        newMsgs.push({ role: "deps", text: ev.text ?? "Dependencies installed.", ts });
+      }
+
+      // ── Run result ──
+      if (ev.type === "run_result") {
+        newMsgs.push({
+          role: "run",
+          command: (ev.command as string) ?? "",
+          exitCode: (ev.exit_code as number) ?? -1,
+          output: (ev.output as string) ?? "",
+          ts,
+        });
+      }
     }
 
     if (newMsgs.length > 0) setChatMessages((prev) => [...prev, ...newMsgs]);
@@ -305,7 +333,7 @@ export default function App() {
           style={{ marginRight: 16 }}
           onClick={() => { setView("projects"); setProject(null); }}
         >
-          <img src={logoUrl} alt="Alchemistral" style={{ height: 20, width: 20, display: "block" }} />
+          <img src={logoUrl} alt="Alchemistral" style={{ height: 20, width: 20, display: "block", filter: mode === "light" ? "invert(1)" : "none" }} />
           <span className="font-mono" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: theme.t }}>
             Alchimistral
           </span>

@@ -219,7 +219,17 @@ export default function ChatPanel({
           {chatMessages.map((msg, i) => (
             <FeedBlock key={i} msg={msg} index={i} />
           ))}
-          {sending && <ThinkingBlock />}
+          {sending && (() => {
+            // Find the last orchestrator thinking/working message for context
+            const lastOrch = [...chatMessages].reverse().find(
+              (m) => m.role === 'orch' && 'text' in m
+            )
+            const label = lastOrch && 'text' in lastOrch ? lastOrch.text : undefined
+            // Only show thinking if the last message isn't already a terminal state
+            const lastMsg = chatMessages[chatMessages.length - 1]
+            const isTerminal = lastMsg && (lastMsg.role === 'mission' || lastMsg.role === 'merge' || lastMsg.role === 'run')
+            return isTerminal ? null : <ThinkingBlock label={label} />
+          })()}
           <div ref={bottomRef} />
         </div>
 

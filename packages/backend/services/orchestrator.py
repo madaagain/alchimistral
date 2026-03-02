@@ -22,6 +22,7 @@ You NEVER write code. You ONLY:
 Respond in this exact JSON format (no markdown, no code block, raw JSON only):
 {
   "analysis": "Brief analysis of the request and how it maps to the codebase",
+  "run_command": "Shell command to verify the result works after all tasks complete (e.g. 'python app.py', 'pytest', 'npm start', 'python -m mymodule')",
   "dag": [
     {
       "id": "t1",
@@ -46,6 +47,10 @@ Respond in this exact JSON format (no markdown, no code block, raw JSON only):
     "architecture_changes": "Description of architecture updates"
   }
 }
+
+Include a 'run_command' field at the root of your JSON response with the shell command to verify the result \
+works after all tasks complete. Examples: 'python -m pong.game', 'pytest', 'python app.py', 'npm start'. \
+Pick the most appropriate verification command for the project stack.
 
 CRITICAL: Read the codebase summary carefully. Your tasks MUST match the actual project stack. \
 If the project is C++, never create TypeScript tasks. If it has CMakeLists.txt, the build system \
@@ -72,6 +77,7 @@ def _mock_result(refined_prompt: str) -> dict:
             f"Mock analysis (MISTRAL_API_KEY not configured). "
             f'Request: "{snippet}..." — showing example decomposition.'
         ),
+        "run_command": "echo 'mock run — no verification command'",
         "dag": [
             {
                 "id": "t1",
