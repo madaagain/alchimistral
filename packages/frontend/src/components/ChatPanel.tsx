@@ -22,6 +22,7 @@ interface ChatPanelProps {
   scanStatus: string | null
   sending: boolean
   setSending: (s: boolean) => void
+  demoMode?: boolean
 }
 
 function fmtTs(): string {
@@ -37,6 +38,7 @@ export default function ChatPanel({
   scanStatus,
   sending,
   setSending,
+  demoMode = false,
 }: ChatPanelProps) {
   const { theme } = useTheme()
   const [input, setInput] = useState('')
@@ -59,7 +61,7 @@ export default function ChatPanel({
     ])
 
     try {
-      await sendMission(projectId, msg)
+      await sendMission(projectId, msg, demoMode)
     } catch (err) {
       setChatMessages((prev) => [
         ...prev,

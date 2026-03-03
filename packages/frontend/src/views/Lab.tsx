@@ -22,6 +22,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ArrowLeft,
+  Sparkles,
 } from 'lucide-react'
 import { useTheme, STATUS_COLORS } from '../hooks/useTheme'
 import Tag from '../components/Tag'
@@ -35,6 +36,7 @@ import type { ChatMsg } from './Room'
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const NODE_WIDTH = 240
+const CHILD_NODE_WIDTH = 180
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -91,6 +93,8 @@ function CanvasNode({
   const dragging = useRef(false)
   const startPos = useRef({ mx: 0, my: 0, nx: 0, ny: 0 })
   const isOrch = node.type === 'orch'
+  const isChild = node.type === 'child'
+  const nodeWidth = isChild ? CHILD_NODE_WIDTH : NODE_WIDTH
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -116,7 +120,7 @@ function CanvasNode({
   return (
     <div
       onMouseDown={handleMouseDown}
-      style={{ position: 'absolute', left: node.x, top: node.y, width: NODE_WIDTH, cursor: 'grab', userSelect: 'none' }}
+      style={{ position: 'absolute', left: node.x, top: node.y, width: nodeWidth, cursor: 'grab', userSelect: 'none' }}
     >
       {isOrch && (
         <div className="flex items-center justify-center gap-1 font-mono" style={{ textAlign: 'center', fontSize: 7, letterSpacing: 3, color: theme.t3, marginBottom: 4 }}>
@@ -126,10 +130,17 @@ function CanvasNode({
       <div
         style={{
           background: selected ? theme.bg2 : theme.bg1,
-          border: `1px solid ${selected ? theme.t3 : theme.bdr}`,
-          borderRadius: 6, overflow: 'hidden',
-          boxShadow: selected ? `0 0 0 1px ${theme.bdr},0 8px 24px rgba(0,0,0,.7)` : '0 2px 8px rgba(0,0,0,.4)',
+          border: isChild
+            ? `1.5px dashed ${selected ? theme.amb : theme.amb + '55'}`
+            : `1px solid ${selected ? theme.t3 : theme.bdr}`,
+          borderRadius: isChild ? 8 : 6,
+          overflow: 'hidden',
+          boxShadow: selected
+            ? `0 0 0 1px ${theme.bdr},0 8px 24px rgba(0,0,0,.7)`
+            : isChild ? `0 0 6px ${theme.amb}22` : '0 2px 8px rgba(0,0,0,.4)',
           transition: 'border-color 150ms ease, box-shadow 150ms ease',
+          transform: isChild ? 'scale(0.92)' : undefined,
+          transformOrigin: 'top center',
         }}
       >
         <div className="flex items-center gap-1.5" style={{ padding: '7px 10px', borderBottom: `1px solid ${theme.bdr}` }}>
@@ -169,7 +180,7 @@ function CanvasNode({
 
 // ── Edges ────────────────────────────────────────────────────────────────────
 
-function EdgesLayer({ nodes, edges }: { nodes: AgentNode[]; edges: { from: string; to: string }[] }) {
+function EdgesLayer({ nodes, edges }: { nodes: AgentNode[]; edges: { from: string; to: string; dashed?: boolean }[] }) {
   const { theme } = useTheme()
   const nodeMap: Record<string, AgentNode> = {}
   nodes.forEach((n) => (nodeMap[n.id] = n))
@@ -179,25 +190,48 @@ function EdgesLayer({ nodes, edges }: { nodes: AgentNode[]; edges: { from: strin
         <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
           <polygon points="0 0, 6 2, 0 4" fill={theme.t3} opacity={0.3} />
         </marker>
+        <marker id="arrowhead-amber" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
+          <polygon points="0 0, 6 2, 0 4" fill={theme.amb} opacity={0.4} />
+        </marker>
       </defs>
       {edges.map((e, i) => {
         const f = nodeMap[e.from]; const t = nodeMap[e.to]
         if (!f || !t) return null
-        const fx = f.x + NODE_WIDTH / 2; const fy = f.y + 140
-        const tx = t.x + NODE_WIDTH / 2; const ty = t.y
+        const fWidth = f.type === 'child' ? CHILD_NODE_WIDTH : NODE_WIDTH
+        const tWidth = t.type === 'child' ? CHILD_NODE_WIDTH : NODE_WIDTH
+        const fx = f.x + fWidth / 2; const fy = f.y + 140
+        const tx = t.x + tWidth / 2; const ty = t.y
         const cy = (fy + ty) / 2
-        return <path key={i} d={`M${fx},${fy} C${fx},${cy} ${tx},${cy} ${tx},${ty}`} fill="none" stroke={theme.t3} strokeWidth={1} strokeOpacity={0.2} markerEnd="url(#arrowhead)" />
+        return (
+          <path
+            key={i}
+            d={`M${fx},${fy} C${fx},${cy} ${tx},${cy} ${tx},${ty}`}
+            fill="none"
+            stroke={e.dashed ? theme.amb : theme.t3}
+            strokeWidth={e.dashed ? 1.5 : 1}
+            strokeOpacity={e.dashed ? 0.4 : 0.2}
+            strokeDasharray={e.dashed ? '6 3' : undefined}
+            markerEnd={e.dashed ? 'url(#arrowhead-amber)' : 'url(#arrowhead)'}
+          />
+        )
       })}
     </svg>
   )
 }
 
-function buildLiveEdges(nodes: AgentNode[]): { from: string; to: string }[] {
-  const edges: { from: string; to: string }[] = []
+function buildLiveEdges(nodes: AgentNode[]): { from: string; to: string; dashed?: boolean }[] {
+  const edges: { from: string; to: string; dashed?: boolean }[] = []
   const orch = nodes.find((n) => n.type === 'orch')
   if (orch) {
     for (const n of nodes) {
       if (n.type === 'parent') edges.push({ from: orch.id, to: n.id })
+    }
+  }
+  // Child → parent edges
+  for (const n of nodes) {
+    if (n.type === 'child' && n.children.length > 0) {
+      // children[0] stores the parent id for child nodes
+      edges.push({ from: n.children[0], to: n.id, dashed: true })
     }
   }
   return edges
@@ -372,9 +406,10 @@ interface LabProps {
   setChatMessages: React.Dispatch<React.SetStateAction<ChatMsg[]>>
   scanStatus: string | null
   refreshTick: number
+  demoMode?: boolean
 }
 
-export default function Lab({ projectId, wsMessages, chatMessages, setChatMessages, scanStatus, refreshTick }: LabProps) {
+export default function Lab({ projectId, wsMessages, chatMessages, setChatMessages, scanStatus, refreshTick, demoMode = false }: LabProps) {
   const { theme } = useTheme()
 
   // ── Canvas state ──
@@ -425,17 +460,39 @@ export default function Lab({ projectId, wsMessages, chatMessages, setChatMessag
             })
           }
           const domain = (msg.domain as string) || 'backend'
-          nodes.push({
-            id: agentId, type: 'parent', x: 0, y: 0,
-            label: (msg.label as string) || agentId,
-            sub: `vibe cli \u00b7 ${domain} \u00b7 worktree`, status: 'active',
-            tokens: '0', progress: 5,
-            task: (msg.label as string) || 'Working...',
-            children: [], branch: `agent/${agentId}`, skills: [],
-            validation: null, worktree: `.worktrees/${agentId}/`,
-          })
-          const orchNode = nodes.find((n) => n.type === 'orch')
-          if (orchNode && !orchNode.children.includes(agentId)) orchNode.children = [...orchNode.children, agentId]
+          const isChild = (msg.is_child as boolean) || false
+          const parentId = (msg.parent_id as string) || null
+
+          if (isChild && parentId) {
+            const parent = nodes.find((n) => n.id === parentId)
+            const childX = parent ? parent.x + 30 : 0
+            const childY = parent ? parent.y + 220 : 580
+            nodes.push({
+              id: agentId, type: 'child', x: childX, y: childY,
+              label: (msg.label as string) || agentId,
+              sub: `child of ${parentId} \u00b7 worktree`, status: 'active',
+              tokens: '0', progress: 5,
+              task: (msg.label as string) || 'Working...',
+              children: [parentId],
+              branch: `agent/${agentId}`, skills: [],
+              validation: null, worktree: `.worktrees/${agentId}/`,
+            })
+            if (parent) {
+              parent.children = [...parent.children, agentId]
+            }
+          } else {
+            nodes.push({
+              id: agentId, type: 'parent', x: 0, y: 0,
+              label: (msg.label as string) || agentId,
+              sub: `vibe cli \u00b7 ${domain} \u00b7 worktree`, status: 'active',
+              tokens: '0', progress: 5,
+              task: (msg.label as string) || 'Working...',
+              children: [], branch: `agent/${agentId}`, skills: [],
+              validation: null, worktree: `.worktrees/${agentId}/`,
+            })
+            const orchNode = nodes.find((n) => n.type === 'orch')
+            if (orchNode && !orchNode.children.includes(agentId)) orchNode.children = [...orchNode.children, agentId]
+          }
           return positionNodes(nodes)
         })
       }
@@ -600,6 +657,26 @@ export default function Lab({ projectId, wsMessages, chatMessages, setChatMessag
           </div>
         </div>
 
+        {/* Demo badge */}
+        {demoMode && (
+          <div
+            className="absolute flex items-center gap-1.5 font-mono"
+            style={{
+              top: 12, left: '50%', transform: 'translateX(-50%)',
+              padding: '4px 12px', borderRadius: 4,
+              background: theme.amb + '15',
+              border: `1px solid ${theme.amb}33`,
+              color: theme.amb,
+              fontSize: 9, fontWeight: 600, letterSpacing: 1,
+              zIndex: 40,
+              boxShadow: `0 0 12px ${theme.amb}22`,
+            }}
+          >
+            <Sparkles size={10} style={{ color: theme.amb }} />
+            DEMO MODE — Mock agents, no API calls
+          </div>
+        )}
+
         {/* Minimap */}
         <div className="absolute" style={{ bottom: 16, right: chatOpen ? 396 : 16, width: 140, height: 70, background: theme.bg1, border: `1px solid ${theme.bdr}`, borderRadius: 4, overflow: 'hidden', zIndex: 40, transition: 'right 200ms ease' }}>
           <div className="absolute font-mono" style={{ top: 3, left: 5, fontSize: 6, letterSpacing: 2, color: theme.t3 }}>MAP</div>
@@ -627,6 +704,7 @@ export default function Lab({ projectId, wsMessages, chatMessages, setChatMessag
           scanStatus={scanStatus}
           sending={sending}
           setSending={setSending}
+          demoMode={demoMode}
         />
       )}
     </div>

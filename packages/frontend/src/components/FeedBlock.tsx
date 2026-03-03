@@ -134,8 +134,16 @@ export default function FeedBlock({ msg }: FeedBlockProps) {
     if (msg.eventType === 'spawn') {
       effectiveBorder = theme.pur
       icon = <Bot size={10} style={{ color: theme.pur }} />
+    } else if (msg.eventType === 'child_spawn') {
+      effectiveBorder = theme.amb
+      effectiveLabel = 'CHILD AGENT'
+      icon = <Bot size={10} style={{ color: theme.amb }} />
     } else if (msg.eventType === 'done') {
       effectiveBorder = theme.grn
+      icon = <CheckCircle2 size={10} style={{ color: theme.grn }} />
+    } else if (msg.eventType === 'child_done') {
+      effectiveBorder = theme.grn
+      effectiveLabel = 'CHILD COMPLETE'
       icon = <CheckCircle2 size={10} style={{ color: theme.grn }} />
     } else if (msg.eventType === 'error') {
       effectiveBorder = theme.red

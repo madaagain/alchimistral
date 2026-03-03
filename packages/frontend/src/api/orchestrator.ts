@@ -10,11 +10,11 @@ export interface OrchestratorTask {
   prompt: string
 }
 
-export async function sendMission(projectId: string, message: string): Promise<void> {
+export async function sendMission(projectId: string, message: string, demo = false): Promise<void> {
   const r = await fetch(`${BASE}/api/projects/${projectId}/mission`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, demo }),
   })
   if (!r.ok) throw new Error(`Mission failed: ${r.statusText}`)
 }

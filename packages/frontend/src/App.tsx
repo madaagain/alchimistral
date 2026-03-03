@@ -5,7 +5,7 @@ import {
   Bot,
   Loader2,
   GitBranch,
-  Play,
+  Sparkles,
   User,
   Settings,
   X,
@@ -185,6 +185,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [liveAgents, setLiveAgents] = useState<AgentInfo[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
   const { connected, messages } = useWebSocket("ws://localhost:8000/ws");
 
   // ── App-level chat state ──────────────────────────────────────────────
@@ -257,6 +258,26 @@ export default function App() {
         });
       }
 
+      // ── Child agent events ──
+      if (ev.type === "child_agent_spawn") {
+        newMsgs.push({
+          role: "agent",
+          agentId: (ev.agent_id as string) ?? "",
+          eventType: "child_spawn",
+          text: `Child agent spawned: ${(ev.label as string) ?? "child"} (from ${(ev.parent_id as string) ?? "parent"})`,
+          ts,
+        });
+      }
+      if (ev.type === "child_agent_complete") {
+        newMsgs.push({
+          role: "agent",
+          agentId: (ev.agent_id as string) ?? "",
+          eventType: "child_done",
+          text: `Child agent completed: ${(ev.label as string) ?? "child"}`,
+          ts,
+        });
+      }
+
       // ── Merge complete ──
       if (ev.type === "merge_complete") {
         newMsgs.push({
@@ -311,6 +332,13 @@ export default function App() {
     const iv = setInterval(pollAgents, 5000);
     return () => clearInterval(iv);
   }, [pollAgents]);
+
+  // Auto-advance to lab when demo mode is toggled on with a project
+  useEffect(() => {
+    if (demoMode && project && view !== "lab") {
+      setView("lab");
+    }
+  }, [demoMode, project, view]);
 
   // Welcome screen
   if (view === "welcome") {
@@ -386,12 +414,21 @@ export default function App() {
             <Settings size={12} style={{ color: theme.t3 }} />
           </button>
 
-          <div
+          <button
+            onClick={() => setDemoMode((v) => !v)}
             className="flex items-center gap-1 font-mono"
-            style={{ padding: "3px 8px", borderRadius: 3, fontSize: 8, fontWeight: 600, letterSpacing: 0.8, background: theme.grn + "15", border: `1px solid ${theme.grn}33`, color: theme.grn }}
+            style={{
+              padding: "3px 8px", borderRadius: 3, fontSize: 8, fontWeight: 600, letterSpacing: 0.8,
+              background: demoMode ? theme.amb + "18" : "transparent",
+              border: `1px solid ${demoMode ? theme.amb + "55" : theme.bdr}`,
+              color: demoMode ? theme.amb : theme.t3,
+              cursor: "pointer",
+              boxShadow: demoMode ? `0 0 8px ${theme.amb}33` : "none",
+              transition: "all 150ms ease",
+            }}
           >
-            <Play size={8} style={{ color: theme.grn }} /> DEMO
-          </div>
+            <Sparkles size={8} style={{ color: demoMode ? theme.amb : theme.t3 }} /> DEMO
+          </button>
 
           <div className="flex items-center justify-center" style={{ width: 24, height: 24, borderRadius: "50%", background: theme.bg2, border: `1px solid ${theme.bdr}` }}>
             <User size={12} style={{ color: theme.t3 }} />
@@ -417,6 +454,7 @@ export default function App() {
               setChatMessages={setChatMessages}
               scanStatus={scanStatus}
               refreshTick={refreshTick}
+              demoMode={demoMode}
             />
           )}
         </div>

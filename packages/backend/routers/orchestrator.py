@@ -12,6 +12,7 @@ from services.alchemistral import get_project
 from services.reprompt import reprompt as _reprompt
 from services.orchestrator import orchestrate as _orchestrate
 from services.pipeline import run_mission
+from services.demo_pipeline import run_demo_mission
 from ws_manager import manager
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/api/projects", tags=["orchestrator"])
 
 class MessageRequest(BaseModel):
     message: str
+    demo: bool = False
 
 
 def _get_alch(project_id: str) -> Path:
@@ -73,5 +75,8 @@ async def mission_endpoint(project_id: str, req: MessageRequest):
     project = get_project(project_id)
     if not project:
         raise HTTPException(404, f"Project not found: {project_id}")
-    asyncio.create_task(run_mission(project_id, req.message, manager.broadcast))
+    if req.demo:
+        asyncio.create_task(run_demo_mission(project_id, req.message, manager.broadcast))
+    else:
+        asyncio.create_task(run_mission(project_id, req.message, manager.broadcast))
     return {"status": "started"}
